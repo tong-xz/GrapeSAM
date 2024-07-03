@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 import torchvision.ops as vision_ops
 import torch.nn.functional as F
-from ops.foundation_models.segment_anything.modeling.mask_decoder import MLP
-from ops.foundation_models.segment_anything.modeling.common import LayerNorm2d
-from ops.foundation_models.segment_anything.modeling.transformer import TwoWayTransformer
+from segment_anything.modeling.mask_decoder import MLP
+from segment_anything.modeling.common import LayerNorm2d
+from segment_anything.modeling.transformer import TwoWayTransformer
 
 class ROIHeadMLP(nn.Module):
     def __init__(self):
@@ -50,7 +50,8 @@ class PointDecoder(nn.Module):
         self.transformer.load_state_dict(sam.mask_decoder.transformer.state_dict())
         self.output_upscaling.load_state_dict(sam.mask_decoder.output_upscaling.state_dict())
         self.output_hypernetworks_mlp.load_state_dict(sam.mask_decoder.output_hypernetworks_mlps[0].state_dict())
-        from ops.foundation_models.segment_anything.modeling.prompt_encoder import PositionEmbeddingRandom
+        
+        from segment_anything.modeling.prompt_encoder import PositionEmbeddingRandom
         embed_dim = 256
         self.image_embedding_size = (64, 64)
         self.pe_layer = PositionEmbeddingRandom(embed_dim // 2)
@@ -101,7 +102,7 @@ class PointDecoder(nn.Module):
                 # print(points.size(), pred_points_score_.size(), pred_points_score_)
                 # print(pred_points.size(), pred_points_score.size())
                 # print(i)
-                #
+                
                 pred_points[i, :points.size(0)] = points
                 pred_points_score[i, :points.size(0)] = pred_points_score_
                 m = max(m, points.size(0))
