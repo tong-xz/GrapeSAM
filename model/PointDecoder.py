@@ -45,6 +45,7 @@ class PointDecoder(nn.Module):
             activation(),
             nn.ConvTranspose2d(transformer_dim // 4, transformer_dim // 8, kernel_size=2, stride=2),
             activation(),
+            #nn.ConvTranspose2d(transformer_dim // 16, 1, kernel_size=2, stride=2),  # 新增的上采样层，将通道数调整为 1
         )
         self.output_hypernetworks_mlp = MLP(transformer_dim, transformer_dim, transformer_dim // 8, 3)
         self.transformer.load_state_dict(sam.mask_decoder.transformer.state_dict())
