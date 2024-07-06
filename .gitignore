@@ -1,1 +1,4 @@
 data/
+# Ignore Python compiled files
+*.pyc
+model/__pycache__/
