@@ -48,6 +48,8 @@ class WgisdDataset(nn.Module):
             heatmaps_ = torch.max(heatmaps_, dim=0).values
             heatmaps_ = heatmaps_.reshape(1, 1, heatmap_size[0], heatmap_size[1])
             heatmaps = torch.maximum(heatmaps, heatmaps_)
+         # 删除不必要的维度
+        heatmaps = heatmaps.squeeze(0)
         return heatmaps.float()
 
     def __getitem__(self, idx):
@@ -63,7 +65,7 @@ class WgisdDataset(nn.Module):
 
         ann_path = os.path.join(self.ann_path, self.img_list[idx].split('.')[0]+'-berries.txt')
         dot_ann = np.loadtxt(ann_path) # np: (n, 2)
-        heatmap = self._create_heatmap(dot_ann) # [1, 1, 256, 256]
+        heatmap = self._create_heatmap(dot_ann) # [1, 256, 256]
         return img, heatmap
 
 
@@ -100,18 +102,18 @@ class WgisdDataset(nn.Module):
 
 
 def main():
-    data_path = '/Users/tongxiangzhi/Dev/Dream/data/berry_dataset/train'
+    data_path = 'data/berry_dataset/train'
     transform = transforms.Compose([
         transforms.Resize((256, 256)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     d = WgisdDataset(data_path, img_transform=transform)
-    
-    d.visualize(1, 'heatmap')
-    # dd = DataLoader(d, batch_size=8, shuffle=True, num_workers=8)
-    # for img, heatmap in dd:
-    #     print(img.shape, heatmap.shape)
+    print(d[1][1].shape)
+    # d.visualize(1, 'heatmap')
+    dd = DataLoader(d, batch_size=8, shuffle=True, num_workers=8)
+    for img, heatmap in dd:
+        print(img.shape, heatmap.shape)
 
 
 if __name__ == "__main__":
