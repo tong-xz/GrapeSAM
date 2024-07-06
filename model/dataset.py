@@ -7,6 +7,7 @@ import albumentations as A
 from PIL import Image
 import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
+from torch.utils.data import DataLoader
 
 class WgisdDataset(nn.Module):
     def __init__(self, data_path, img_transform=None) -> None:
@@ -58,7 +59,8 @@ class WgisdDataset(nn.Module):
         ])
 
         img = Image.fromarray(transform(image=np.array(img))['image']) # PIL image
-        img = self.img_transform(img) #(3, 1024, 1024)
+        img = self.img_transform(img) #(3, 256, 256)
+
         ann_path = os.path.join(self.ann_path, self.img_list[idx].split('.')[0]+'-berries.txt')
         dot_ann = np.loadtxt(ann_path) # np: (n, 2)
         heatmap = self._create_heatmap(dot_ann) # [1, 1, 256, 256]
@@ -82,8 +84,9 @@ class WgisdDataset(nn.Module):
             plt.scatter(dot_ann[:,0], dot_ann[:,1], color='r', s=1)
         elif mode == 'heatmap':
             img, heatmap = self.__getitem__(idx)
-            resize_transform = transforms.Resize((256, 256))
-            img = resize_transform(img)  # Resize the image to 256x256
+
+            assert img.shape == torch.Size([3, 256, 256]), "Resize to 256x256"
+
             heatmap = transforms.Resize((256, 256))(heatmap)  # Resize the heatmap to 256x256
             img = img.permute(1, 2, 0).numpy()  # Convert from (C, H, W) to (H, W, C)
             img = img * np.array([0.229, 0.224, 0.225]) + np.array([0.485, 0.456, 0.406])  # Unnormalize
@@ -99,11 +102,16 @@ class WgisdDataset(nn.Module):
 def main():
     data_path = '/Users/tongxiangzhi/Dev/Dream/data/berry_dataset/train'
     transform = transforms.Compose([
+        transforms.Resize((256, 256)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     d = WgisdDataset(data_path, img_transform=transform)
+    
     d.visualize(1, 'heatmap')
+    # dd = DataLoader(d, batch_size=8, shuffle=True, num_workers=8)
+    # for img, heatmap in dd:
+    #     print(img.shape, heatmap.shape)
 
 
 if __name__ == "__main__":
