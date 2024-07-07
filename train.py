@@ -13,6 +13,7 @@ BATCH_SIZE = 4
 ROOT_DIR = 'data/berry_dataset/'
 
 
+# TODO: change loss and point numbers
 def main():
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     train_dir, val_dir, test_dir  = ROOT_DIR + 'train', ROOT_DIR + 'val', ROOT_DIR + 'test'

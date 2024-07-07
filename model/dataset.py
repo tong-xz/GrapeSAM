@@ -22,6 +22,7 @@ class WgisdDataset(nn.Module):
     def __len__(self):
         return len(self.img_list)
 
+    #TODO changeable sigma
     def _create_heatmap(self, points,heatmap_size=(256, 256)):
         sigma=1
         scale = 8 # 2048 / 8 = 256
