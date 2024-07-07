@@ -5,7 +5,6 @@ from model.dataset import WgisdDataset
 import torchvision.transforms as transforms
 
 
-
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 sam = build_sam_vit_h().to(device).eval()
 point_decoder = PointDecoder(sam).to(device)
@@ -21,5 +20,5 @@ point_decoder.load_state_dict(torch.load('decoder.pth'))
 # 将模型设置为评估模式
 point_decoder.eval()
 
-wgisd_test = WgisdDataset('/home/xz/Dev/Dream/data/berry_dataset/test', transform)
-print(wgisd_test[0])
+wgisd_test = WgisdDataset('/data/berry_dataset/test', transform)
+
