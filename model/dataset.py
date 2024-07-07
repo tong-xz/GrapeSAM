@@ -54,6 +54,7 @@ class WgisdDataset(nn.Module):
 
     def __getitem__(self, idx):
         img_path = os.path.join(self.img_path, self.img_list[idx])
+        print(img_path)
         img = Image.open(img_path)
         transform = A.Compose([
             A.LongestMaxSize(1024),
