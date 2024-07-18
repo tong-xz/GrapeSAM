@@ -8,8 +8,9 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
+from torch.utils.data import Dataset
 
-class WgisdDataset(nn.Module):
+class WgisdDataset(Dataset):
     def __init__(self, data_path, img_transform=None) -> None:
         super(WgisdDataset, self).__init__()
         self.data_path = data_path
