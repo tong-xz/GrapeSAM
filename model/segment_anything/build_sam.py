@@ -60,7 +60,8 @@ _MODELS = {
     "vit_b": "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth",
 }
 
-base_download_root = '~/.cache/torch/segment_anything'
+# base_download_root = '~/.cache/torch/segment_anything'
+base_download_root = '/home/xz/Dev/Dream/weights'
 import os
 import urllib
 import tqdm
