@@ -87,12 +87,13 @@ def main():
     
     # 创建数据集
     dataset = RedoDataset(
-        img_path='/Users/tongxiangzhi/Dev/Dream/data/redo/images/output',
-        json_path='/Users/tongxiangzhi/Dev/Dream/data/redo/images/output/updated_annotations.json',
+        img_path='/home/xz/Dev/Dream/data/redo/images/output',
+        json_path='/home/xz/Dev/Dream/data/redo/annotations/updated_annotations.json',
         transform=transform
     )
     
-    a, b = dataset[1]
+    a, b = dataset[71]
+    dataset.visualize(71)
     print(a.shape, b.shape)
 
 if __name__ == '__main__':
