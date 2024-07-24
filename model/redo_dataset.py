@@ -6,9 +6,11 @@ import os
 import json
 import matplotlib.pyplot as plt
 from torchvision import transforms
+from pycocotools.coco import COCO
+from pycocotools.mask import decode
 
 class RedoDataset(Dataset):
-    def __init__(self, img_path, json_path, transform=None):
+    def __init__(self, img_path, json_path, coco_json_path, transform=None):
         super(RedoDataset, self).__init__()
         self.img_path = img_path
         self.transform = transform
@@ -17,34 +19,44 @@ class RedoDataset(Dataset):
             self.data = json.load(f)
         
         self.items = self.data['items']
+        self.coco = COCO(coco_json_path)
+
+         # Create a mapping from file name to COCO image ID
+        self.filename_to_id = {os.path.basename(img['file_name']): img['id'] for img in self.coco.dataset['images']}
+
 
     def __len__(self):
         return len(self.items)
 
     def __getitem__(self, idx):
+        
         item = self.items[idx]
         
-        # 加载图像
+        # Load image
         img_name = item['id'].replace("Redo Examples/", "") + ".jpg"
         img_path = os.path.join(self.img_path, img_name)
         image = Image.open(img_path).convert('RGB')
         
-        # 处理标注
+        # Load annotations
         annotations = item['annotations']
-        points = []
-        for ann in annotations:
-            if 'points' in ann:
-                # 将点转换为 (x, y) 对
-                points.extend([(ann['points'][i], ann['points'][i+1]) for i in range(0, len(ann['points']), 2)])
-        
-        # 转换为张量，形状为 (n, 2)
+        points = [(ann['points'][i], ann['points'][i+1]) for ann in annotations for i in range(0, len(ann['points']), 2)]
         points = torch.tensor(points, dtype=torch.float32)
         
-        # 应用变换（如果有）
+        # Get the corresponding image ID from the file name
+        coco_img_id = self.filename_to_id.get(os.path.basename(img_name))
+        print(coco_img_id, img_name)
+        
+        # Load mask from COCO annotations using the image ID
+        
+        ann_ids = self.coco.getAnnIds(imgIds=coco_img_id, iscrowd=None)
+        anns = self.coco.loadAnns(ann_ids)[0]['segmentation']
+
+
         if self.transform:
             image = self.transform(image)
         
-        return image, points
+        return image, points, anns
+
 
     def get_img_info(self, idx):
         item = self.items[idx]
@@ -89,12 +101,12 @@ def main():
     dataset = RedoDataset(
         img_path='/home/xz/Dev/Dream/data/redo/images/output',
         json_path='/home/xz/Dev/Dream/data/redo/annotations/updated_annotations.json',
+        coco_json_path='/home/xz/Dev/Dream/data/redo/annotations/instance.json',
         transform=transform
     )
     
-    a, b = dataset[71]
-    dataset.visualize(71)
-    print(a.shape, b.shape)
+    a, b, c = dataset[3]
+    print(c)
 
 if __name__ == '__main__':
     main()
