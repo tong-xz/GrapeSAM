@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 from torchvision import transforms
 from pycocotools.coco import COCO
 from pycocotools.mask import decode
+from pycocotools import mask as maskUtils
+from PIL import Image, ImageOps
+import numpy as np
 
 class RedoDataset(Dataset):
     def __init__(self, img_path, json_path, coco_json_path, transform=None):
@@ -47,7 +50,6 @@ class RedoDataset(Dataset):
         print(coco_img_id, img_name)
         
         # Load mask from COCO annotations using the image ID
-        
         ann_ids = self.coco.getAnnIds(imgIds=coco_img_id, iscrowd=None)
         anns = self.coco.loadAnns(ann_ids)[0]['segmentation']
 
@@ -61,10 +63,66 @@ class RedoDataset(Dataset):
     def get_img_info(self, idx):
         item = self.items[idx]
         return {"height": item['image']['size'][1], "width": item['image']['size'][0]}
+    
+    def process_mask(mask):
+        # Ensure the counts field is properly formatted for pycocotools 
+        if isinstance(mask['counts'], list):
+            rle = maskUtils.frPyObjects(mask, mask['size'][0], mask['size'][1])
+        else:
+            rle = mask
+        
+        print(f"Original mask size: {mask['size']}")
+        binary_mask = maskUtils.decode(rle)
+        
+        # Convert binary mask to PIL Image
+        mask_image = Image.fromarray((binary_mask * 255).astype('uint8'))
+        
+        # Calculate new width to maintain aspect ratio
+        aspect_ratio = mask['size'][1] / mask['size'][0]
+        new_width = int(1080 * aspect_ratio)
+        
+        # Resize the mask to have height 1080 while maintaining aspect ratio
+        resized_mask = mask_image.resize((new_width, 1080), Image.LANCZOS)
+        
+        # Pad the resized mask to 1080x1080
+        padded_mask = ImageOps.pad(resized_mask, (1080, 1080), color="black")
+        
+        # Convert back to numpy array
+        final_mask = np.array(padded_mask) / 255
+        
+        print(f"Final mask shape: {final_mask.shape}")
+        
+        return final_mask
 
     def visualize(self, idx):
+        _, _, mask = self.__getitem__(idx)
+       # Ensure the counts field is properly formatted for pycocotools
+        if isinstance(mask['counts'], list):
+            rle = maskUtils.frPyObjects(mask, mask['size'][0], mask['size'][1])
+        else:
+            rle = mask
+        
+        binary_mask = maskUtils.decode(rle)
+
+        # Convert binary mask to PIL Image
+        mask_image = Image.fromarray((binary_mask * 255).astype('uint8'))
+        
+        # Calculate new width to maintain aspect ratio
+        aspect_ratio = binary_mask.shape[1] / binary_mask.shape[0]
+        new_width = int(1080 * aspect_ratio)
+        
+        # Resize the mask to have height 1080 while maintaining aspect ratio
+        resized_mask = mask_image.resize((new_width, 1080), Image.LANCZOS)
+        
+        # Pad the resized mask to 1080x1080
+        padded_mask = ImageOps.pad(resized_mask, (1080, 1080), color="black")
+        
+        # Convert back to numpy array
+        binary_mask = np.array(padded_mask) / 255
+    
         item = self.items[idx]
         
+
         # 加载图像
         img_name = item['id'].replace("Redo Examples/", "") + ".jpg"
         img_path = os.path.join(self.img_path, img_name)
@@ -72,10 +130,15 @@ class RedoDataset(Dataset):
         
         # 获取标注
         annotations = item['annotations']
-        
+
+
         # 创建图像
         fig, ax = plt.subplots(figsize=(10, 10))
         ax.imshow(image)
+
+        # Overlay mask with transparency
+        ax.imshow(binary_mask, cmap='jet', alpha=0.4)  # You can adjust the colormap and alpha as needed
+    
         
         # 绘制标注点
         for ann in annotations:
@@ -88,7 +151,9 @@ class RedoDataset(Dataset):
         ax.set_title(f"Image: {img_name}")
         ax.axis('off')
         plt.tight_layout()
-        plt.show()
+        plt.savefig(f'/home/xz/Dev/Dream/grant/dataset_Sample/{img_name}', dpi=300, bbox_inches='tight')
+        # plt.show()
+
 
 def main():
     # 定义变换
@@ -102,11 +167,13 @@ def main():
         img_path='/home/xz/Dev/Dream/data/redo/images/output',
         json_path='/home/xz/Dev/Dream/data/redo/annotations/updated_annotations.json',
         coco_json_path='/home/xz/Dev/Dream/data/redo/annotations/instance.json',
-        transform=transform
     )
     
-    a, b, c = dataset[3]
-    print(c)
+    for i in range(len(dataset)):
+        dataset.visualize(i)
+
+
+
 
 if __name__ == '__main__':
     main()
