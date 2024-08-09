@@ -1,1 +1,0 @@
-# Vinyard Vision Dataset

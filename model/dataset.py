@@ -81,7 +81,7 @@ class WgisdDataset(Dataset):
         """
         img_path = os.path.join(self.img_path, self.img_list[idx])
         image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
-
+        plt.figure(figsize=(10, 10))
         if mode == 'ann':
             ann_path = os.path.join(self.ann_path, self.img_list[idx].split('.')[0]+'-berries.txt')
             dot_ann = np.loadtxt(ann_path)
@@ -103,7 +103,6 @@ class WgisdDataset(Dataset):
         plt.show()
 
 
-
 def main():
     data_path = 'data/berry_dataset/train'
     transform = transforms.Compose([
@@ -113,7 +112,7 @@ def main():
     ])
     d = WgisdDataset(data_path, img_transform=transform)
     print(d[1][1].shape)
-    # d.visualize(1, 'heatmap')
+    d.visualize(1, 'heatmap')
     dd = DataLoader(d, batch_size=8, shuffle=True, num_workers=8)
     for img, heatmap in dd:
         print(img.shape, heatmap.shape)

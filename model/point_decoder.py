@@ -85,7 +85,7 @@ class PointDecoder(nn.Module):
 
         with torch.no_grad():
             from .ops.ops import _nms
-            # pred_heatmaps_nms = _nms(pred_heatmaps.detach().sigmoid().clone(), self.nms_kernel_size)
+
             pred_heatmaps_nms = _nms(pred_heatmaps.detach().clone(), self.nms_kernel_size)
             pred_points, pred_points_score = torch.zeros(b, self.max_points, 2).cuda(), torch.zeros(b,
                                                                                                     self.max_points).cuda()
@@ -100,14 +100,11 @@ class PointDecoder(nn.Module):
                 # print(points.size(), pred_points_score_.size(),  idx, idx.max())
                 points = points[idx]
                 pred_points_score_ = pred_points_score_[idx]
-                # print(points.size(), pred_points_score_.size(), pred_points_score_)
-                # print(pred_points.size(), pred_points_score.size())
-                # print(i)
                 
                 pred_points[i, :points.size(0)] = points
                 pred_points_score[i, :points.size(0)] = pred_points_score_
                 m = max(m, points.size(0))
-            # pred_points = (pred_points + 0.5) * 4
+
             pred_points = pred_points[:, :m]
             pred_points_score = pred_points_score[:, :m]
             pred_points = pred_points * 4
