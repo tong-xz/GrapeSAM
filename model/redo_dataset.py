@@ -8,7 +8,8 @@ import torch
 import  matplotlib.pyplot as plt
 import cv2
 import torch.nn.functional as  F
-from transform import convert
+from .ops.utils import rescale_img_points
+from .ops.utils import create_heatmap
 
 
 class RedoDataset(Dataset):
@@ -24,37 +25,7 @@ class RedoDataset(Dataset):
     
     def __len__(self):
         return len(self.im_list)
-    
 
-    def _create_heatmap(self, points, heatmap_size=(256, 256), sigma=2):
-        scale = 8 # 2048 / 8 = 256
-        # 检查 sigma 是否是 torch.Tensor 类型
-        if not isinstance(sigma, torch.Tensor):
-            sigma = torch.ones(len(points)) * sigma
-
-        # 缩放点坐标
-        points = points / scale
-        points = torch.tensor(points, dtype=torch.float32)
-
-        # 生成网格坐标
-        x = torch.arange(0, heatmap_size[0], 1)
-        y = torch.arange(0, heatmap_size[1], 1)
-        x, y = torch.meshgrid(x, y, indexing='xy')
-        x, y = x.unsqueeze(0), y.unsqueeze(0)
-
-        heatmaps = torch.zeros(1, 1, heatmap_size[0], heatmap_size[1])
-
-        # 计算每个点的高斯热力图并合并
-        for indices in torch.arange(len(points)):
-            mu_x, mu_y = points[indices, 0].view(-1, 1, 1), points[indices, 1].view(-1, 1, 1)
-            heatmaps_ = torch.exp(- ((x - mu_x) ** 2 + (y - mu_y) ** 2) / (2 * sigma[indices].view(-1, 1, 1) ** 2))
-            heatmaps_ = torch.max(heatmaps_, dim=0).values
-            heatmaps_ = heatmaps_.reshape(1, 1, heatmap_size[0], heatmap_size[1])
-            heatmaps = torch.maximum(heatmaps, heatmaps_)
-         # 删除不必要的维度
-        heatmaps = heatmaps.squeeze(0)
-        return heatmaps.float()
-    
     
     def __getitem__(self, index):
         img_path = self.im_list[index % len(self.im_list)]
@@ -62,10 +33,10 @@ class RedoDataset(Dataset):
         img = Image.open(img_path).convert('RGB')
         img = self.transform(img)
         keypoints = np.load(gd_path)
-
-        img, heatmap = convert(img, keypoints)
-        heatmap = self._create_heatmap(keypoints, heatmap_size=(2048, 2048))
-        
+        #TODO add crop
+        img, keypoints = rescale_img_points(img, keypoints, img_target_size=(1024, 1024), point_target_size=(256, 256))
+        # import pdb; pdb.set_trace()
+        heatmap = create_heatmap(keypoints, img_size=(256, 256))
         return img, heatmap
 
 
@@ -132,14 +103,35 @@ def show_tensor_image_with_dots(tensor_image, keypoints):
 
 
 
+def visualize_heatmap(heatmap_data):
+    # Create a figure and axis
+    fig, ax = plt.subplots()
+    
+    # Plot the heatmap
+    im = ax.imshow(heatmap_data, cmap='viridis')
+    
+    # Add a colorbar
+    cbar = ax.figure.colorbar(im, ax=ax)
+    
+    # Set the title
+    ax.set_title("Heatmap Visualization")
+    
+    # Show the plot
+    plt.show()
+
+
 def main():
     path = '/home/xz/Dev/Dream/data/redo-data'
     redo = RedoDataset(path, 'train')
-    img, points = redo[0]
-    print(img.shape, points.shape)
+    img, heatmap = redo[10]
+    print(heatmap.shape)
+    # from torch.utils.data import DataLoader
+    
+    # redo_loader = DataLoader(redo, batch_size=4)
+    # print(next(iter(redo_loader)))
+    # visualize_heatmap(heatmap)
     # show_tensor_image_with_dots(img, points)
 
-    print(redo.visualize(0, mode='heatmap'))
 
 
 if __name__ == '__main__':
