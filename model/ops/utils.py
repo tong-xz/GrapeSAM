@@ -113,29 +113,25 @@ def create_heatmap(points, kernel_size=3, sigma=0.5, img_size=(256, 256)):
     kernel = gaussian_filter(kernel, sigma=sigma)
 
     # Guassian kernel
-    guassian_kernel = GuassiagnKernel(kernel)
+    guassian_kernel = GaussianKernel(kernel)
     density = torch.tensor(density).unsqueeze(0)
-    density_map = guassian_kernel(density).unsqueeze(0).float() #(256, 256) -> (1, 256, 256)
+
+    density_map = guassian_kernel(density)
+    density_map = density_map.unsqueeze(0).float() #(256, 256) -> (1, 256, 256)
     density_map = density_map.detach().numpy()
     return density_map
     
 
 
-
 import torch.nn as nn
 
-class GuassiagnKernel(nn.Module):
+class GaussianKernel(nn.Module):
     def __init__(self, kernel_weights):
         super().__init__()
-        self.kernel = nn.Conv2d(1, 1, kernel_weights.shape, bias=False, padding=kernel_weights.shape[0]//2)
+        self.kernel = nn.Conv2d(1, 1, kernel_weights.shape, bias=False, padding='same')
         kernel_weights = torch.tensor(kernel_weights).unsqueeze(0).unsqueeze(0)
         with torch.no_grad():
             self.kernel.weight = nn.Parameter(kernel_weights)
     
     def forward(self, density):
         return self.kernel(density).squeeze()
-
-
-
-# if __name__ == '__main__':
-    

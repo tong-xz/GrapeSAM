@@ -35,8 +35,8 @@ class RedoDataset(Dataset):
         keypoints = np.load(gd_path)
         #TODO add crop
         img, keypoints = rescale_img_points(img, keypoints, img_target_size=(1024, 1024), point_target_size=(256, 256))
-        # import pdb; pdb.set_trace()
-        heatmap = create_heatmap(keypoints, img_size=(256, 256))
+
+        heatmap = create_heatmap(keypoints, kernel_size=3, sigma=0.5, img_size=(256, 256))
         return img, heatmap
 
 
@@ -103,21 +103,15 @@ def show_tensor_image_with_dots(tensor_image, keypoints):
 
 
 
-def visualize_heatmap(heatmap_data):
-    # Create a figure and axis
-    fig, ax = plt.subplots()
-    
-    # Plot the heatmap
-    im = ax.imshow(heatmap_data, cmap='viridis')
-    
-    # Add a colorbar
-    cbar = ax.figure.colorbar(im, ax=ax)
-    
-    # Set the title
-    ax.set_title("Heatmap Visualization")
-    
-    # Show the plot
+def visualize_heatmap(heatmap, title="Heatmap"):
+    heatmap = np.squeeze(heatmap, axis=0)
+    plt.figure(figsize=(10, 8))
+    plt.imshow(heatmap, cmap='hot', interpolation='nearest')
+    plt.colorbar(label='Density')
+    plt.title(title)
+    plt.axis('off')  # This removes the axis ticks and labels
     plt.show()
+
 
 
 def main():
@@ -129,7 +123,7 @@ def main():
     
     # redo_loader = DataLoader(redo, batch_size=4)
     # print(next(iter(redo_loader)))
-    # visualize_heatmap(heatmap)
+    visualize_heatmap(heatmap)
     # show_tensor_image_with_dots(img, points)
 
 

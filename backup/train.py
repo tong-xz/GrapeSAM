@@ -34,12 +34,7 @@ def main():
     optimizer = torch.optim.AdamW(list(point_mask_decoder.parameters()), lr=0.0001, weight_decay=0.0)
     mseloss=nn.MSELoss()
 
-    imgs, heatmaps = next(iter(train_loader))
-    imgs = imgs.to(device)
-    gt_heatmaps = heatmaps.to(device)
-
-
-    num_epochs = 10
+    num_epochs = 1000
     for epoch in range(num_epochs):
         point_mask_decoder.train()
         running_loss = 0.0
@@ -55,8 +50,7 @@ def main():
             # 训练decoder
             optimizer.zero_grad()
             pred_heatmaps = point_mask_decoder(features)['pred_heatmaps']
-            import pdb; pdb.set_trace()
-            
+
             loss = mseloss(pred_heatmaps, gt_heatmaps)
             loss.backward()
             optimizer.step()

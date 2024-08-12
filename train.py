@@ -27,7 +27,7 @@ def main():
     optimizer = torch.optim.AdamW(list(point_mask_decoder.parameters()), lr=0.0001, weight_decay=0.0)
     mseloss=nn.MSELoss()
 
-    num_epochs = 10
+    num_epochs = 30
 
  
     wandb.login()
@@ -36,7 +36,7 @@ def main():
         # Set the project where this run will be logged
         project="Vivid",
         name='pseco',
-        tags=['']
+        tags=['init']
     )
 
     for epoch in range(num_epochs):
@@ -56,7 +56,8 @@ def main():
             pred_heatmaps = point_mask_decoder(features)['pred_heatmaps']
             # import pdb; pdb.set_trace()
             
-            loss = mseloss(pred_heatmaps, gt_heatmaps)
+            # loss = mseloss(pred_heatmaps, gt_heatmaps, reduction='none')
+            loss = F.binary_cross_entropy_with_logits(pred_heatmaps, gt_heatmaps, reduction='mean')
             loss.backward()
             optimizer.step()
 
@@ -74,7 +75,8 @@ def main():
 
                 features = sam.image_encoder(imgs)
                 pred_heatmaps = point_mask_decoder(features)['pred_heatmaps']
-                loss = mseloss(pred_heatmaps, gt_heatmaps)
+                # loss = mseloss(pred_heatmaps, gt_heatmaps)
+                loss = F.binary_cross_entropy_with_logits(pred_heatmaps, gt_heatmaps, reduction='mean')
                 val_loss += loss.item()
 
         print(f"Validation Loss: {val_loss / len(val_loader):.3f}")
@@ -86,7 +88,7 @@ def main():
 
     wandb.finish()
     print("Training complete")
-    torch.save(point_mask_decoder.state_dict(), 'decoder.pth')
+    torch.save(point_mask_decoder.state_dict(), 'final_decoder.pth')
     
 
 if __name__ == '__main__':
