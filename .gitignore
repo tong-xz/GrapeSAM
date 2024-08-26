@@ -4,3 +4,7 @@ data/
 model/__pycache__/
 figs/
 weights/
+
+raw/anns/
+raw/images/
+raw/json/
