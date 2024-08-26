@@ -2,8 +2,12 @@ import random
 import os
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
-import numpy as npy
+import numpy as np
 from PIL import Image
+import torch.nn.functional as F
+from matplotlib import pyplot as plt
+import torch
+
 
 def _split_phases(folder, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
     '''
@@ -28,6 +32,168 @@ def _split_phases(folder, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
     return train_files, val_files, test_files
 
 
+
+def _convert(img, keypoints, target_size=(2048, 2048)):
+    """
+    Resize the image tensor while maintaining aspect ratio, pad to target size, and adjust keypoints accordingly.
+    
+    :param img: Tensor image of shape (C, H, W)
+    :param keypoints: Numpy array of shape (N, 2), where N is the number of keypoints and each keypoint is (x, y)
+    :param target_size: Desired output size as a tuple (target_height, target_width)
+    :return: Resized and padded image tensor, adjusted keypoints numpy array
+    """
+    
+    _, original_height, original_width = img.shape
+    
+    # Calculate the scale factor while maintaining aspect ratio
+    scale = min(target_size[0] / original_height, target_size[1] / original_width)
+    
+    # Calculate new size
+    new_height = int(original_height * scale)
+    new_width = int(original_width * scale)
+
+    img = F.interpolate(img.unsqueeze(0), size=(new_height, new_width), mode='bilinear', align_corners=False).squeeze(0)
+
+    keypoints = keypoints * scale
+    
+    # Calculate padding
+    pad_height = (target_size[0] - new_height) // 2
+    pad_width = (target_size[1] - new_width) // 2
+    
+    # Apply padding to the image
+    img = F.pad(img, (pad_width, target_size[1] - new_width - pad_width, pad_height, target_size[0] - new_height - pad_height))
+
+    keypoints[:, 0] += pad_width  # Adjust x coordinates
+    keypoints[:, 1] += pad_height # Adjust y coordinates
+    
+    return img, keypoints
+
+
+def _visualize(img_tensor, keypoints):
+    """
+    For annotation visualization
+    Visualize a tensor image with keypoints.
+    """
+    # Convert tensor to numpy format for visualization
+    img_array = img_tensor.permute(1, 2, 0).numpy()  # Convert from (C, H, W) to (H, W, C)
+    
+    # Normalize the image to [0, 1] range if it has been standardized
+    img_array = img_array * np.array([0.229, 0.224, 0.225]) + np.array([0.485, 0.456, 0.406])
+    img_array = np.clip(img_array, 0, 1)
+
+    fig, ax = plt.subplots()
+    ax.imshow(img_array)
+
+    # Plot keypoints
+    x, y = keypoints[:, 0], keypoints[:, 1]
+    ax.scatter(x, y, c='r', s=10)  
+
+    plt.axis('off')  
+    plt.show()
+
+
+# def _create_heatmap(img, points, heatmap_size=(256, 256)):
+#     '''
+#     pseco style heatmap: https://github.com/Hzzone/PseCo/blob/main/fsc147/2_train_heatmap.ipynb
+#     '''
+#     sigma=0.5
+#     scale = 8 # 2048 / 8 = 256
+#     # 检查 sigma 是否是 torch.Tensor 类型
+#     if not isinstance(sigma, torch.Tensor):
+#         sigma = torch.ones(len(points)) * sigma
+
+#     # 缩放点坐标
+#     points = points / scale
+#     points = torch.tensor(points, dtype=torch.float32)
+
+#     # 生成网格坐标
+#     x = torch.arange(0, heatmap_size[0], 1)
+#     y = torch.arange(0, heatmap_size[1], 1)
+#     x, y = torch.meshgrid(x, y, indexing='xy')
+#     x, y = x.unsqueeze(0), y.unsqueeze(0)
+
+#     heatmaps = torch.zeros(1, 1, heatmap_size[0], heatmap_size[1])
+
+#     # 计算每个点的高斯热力图并合并
+#     for indices in torch.arange(len(points)):
+#         mu_x, mu_y = points[indices, 0].view(-1, 1, 1), points[indices, 1].view(-1, 1, 1)
+#         heatmaps_ = torch.exp(- ((x - mu_x) ** 2 + (y - mu_y) ** 2) / (2 * sigma[indices].view(-1, 1, 1) ** 2))
+#         heatmaps_ = torch.max(heatmaps_, dim=0).values
+#         heatmaps_ = heatmaps_.reshape(1, 1, heatmap_size[0], heatmap_size[1])
+#         heatmaps = torch.maximum(heatmaps, heatmaps_)
+
+#     heatmaps = heatmaps.squeeze(0)
+#     img = transforms.Resize(heatmap_size)(img)
+#     return heatmaps.float()
+
+
+def _create_heatmap(img, points, heatmap_size=(256, 256), sigma=1.0, scale=8, normalize=True):
+    """
+    Generate a heatmap for crowd counting tasks.
+    
+    :param img: Tensor image
+    :param points: Array of points (N, 2)
+    :param heatmap_size: Size of the heatmap (height, width)
+    :param sigma: Standard deviation for Gaussian kernel
+    :param scale: Scale factor to downsize points
+    :param normalize: Whether to normalize the heatmap
+    :return: Heatmap tensor
+    """
+    if not isinstance(sigma, torch.Tensor):
+        sigma = torch.ones(len(points)) * sigma
+
+    points = points / scale
+    points = torch.tensor(points, dtype=torch.float32)
+
+    x = torch.arange(0, heatmap_size[0], 1)
+    y = torch.arange(0, heatmap_size[1], 1)
+    x, y = torch.meshgrid(x, y, indexing='xy')
+    x, y = x.unsqueeze(0), y.unsqueeze(0)
+
+    heatmap = torch.zeros(1, 1, heatmap_size[0], heatmap_size[1])
+
+    for i in range(len(points)):
+        mu_x, mu_y = points[i, 0].view(-1, 1, 1), points[i, 1].view(-1, 1, 1)
+        heatmap_ = torch.exp(-((x - mu_x) ** 2 + (y - mu_y) ** 2) / (2 * sigma[i].view(-1, 1, 1) ** 2))
+        heatmap_ = heatmap_.reshape(1, 1, heatmap_size[0], heatmap_size[1])
+        heatmap += heatmap_
+
+    if normalize:
+        heatmap /= heatmap.max()
+
+    img = transforms.Resize(heatmap_size)(img)
+    return heatmap.float()
+
+
+def visualize_img_and_heatmap(img, heatmap):
+    """
+    Visualize an image and its corresponding heatmap side by side.
+
+    :param img: Tensor image of shape (C, H, W)
+    :param heatmap: Heatmap tensor of shape (1, H, W)
+    """
+    img_np = img.permute(1, 2, 0).numpy()  # 转换为 (H, W, C) 形式
+
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+    img_np = img_np * std + mean
+    img_np = np.clip(img_np, 0, 1)  
+
+
+    heatmap_np = heatmap.squeeze().numpy()  
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+
+    axs[0].imshow(img_np)
+    axs[0].set_title('Image')
+    axs[0].axis('off')  
+
+    axs[1].imshow(heatmap_np, cmap='hot')  # 使用 'hot' colormap 来显示热力图
+    axs[1].set_title('Heatmap')
+    axs[1].axis('off')  
+    plt.show()
+
+
+
 class VividDataset(Dataset):
     def __init__(self, data_root, file_list) -> None:
         super(VividDataset, self).__init__()
@@ -36,28 +202,34 @@ class VividDataset(Dataset):
         self.ann_path = os.path.join(data_root, 'anns')
         self.file_list = file_list
         self.img_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
     
     def __len__(self):
         return len(self.file_list)
     
     def __getitem__(self, index):
+        # read img and npy 
         item_name = self.file_list[index]
         img_file_path, dot_ann_path = os.path.join(self.img_path, item_name+'.png'), os.path.join(self.ann_path, item_name+'.npy')
         img = Image.open(img_file_path).convert('RGB')
         if self.img_transform:
             img = self.img_transform(img)
-        dot_ann = npy.load(dot_ann_path) #np.ndarray: (n, 2)
-        return img, dot_ann
-        
+        keypoints = np.load(dot_ann_path) #np.ndarray: (n, 2)
 
+        img, keypoints = _convert(img, keypoints)
+
+        heatmap = _create_heatmap(img, keypoints)
+        return img, heatmap
+        
 
 
 if __name__ == '__main__':
     root = '/home/xz/Dev/Dream/data/images'
     train_files, val_files, test_files = _split_phases(root)
     v = VividDataset('/home/xz/Dev/Dream/data', file_list=train_files)
-    import pdb; pdb.set_trace()
-    print(v[0])
+
+    img, map = v[0]
+    visualize_img_and_heatmap(img, map)
+    print(v[10])
