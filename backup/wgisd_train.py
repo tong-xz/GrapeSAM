@@ -45,7 +45,7 @@ def main():
         name='pseco1',
         tags=['init']
     )
-    num_epochs = 10
+    num_epochs = 100
     print(f'===Start===')
     for epoch in range(num_epochs):
         

@@ -49,7 +49,7 @@ def _nms(heat, kernel=3):
 
 
 def plot_results(image, masks: torch.Tensor = None, points: torch.Tensor = None, bboxes: torch.Tensor = None,
-                 show_num=False, alpha=0.35, figsize=(40, 40)):
+                 show_num=False, alpha=0.35,dot_size=4, figsize=(20, 20)):
     plt.figure(figsize=figsize) 
     plt.imshow(image)
 
@@ -81,7 +81,7 @@ def plot_results(image, masks: torch.Tensor = None, points: torch.Tensor = None,
     if points is not None:
         points = points.cpu().numpy()
         for i in range(len(points)):
-            plt.scatter(points[i, 0], points[i, 1], s=2)
+            plt.scatter(points[i, 0], points[i, 1], s=dot_size)
             if show_num:
                 texts = np.array([str(j) for j in range(len(points))])
                 if masks is not None:
