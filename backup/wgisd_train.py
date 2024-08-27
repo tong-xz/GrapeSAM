@@ -3,14 +3,16 @@ import torchvision.transforms as transforms
 import torch
 import sys
 sys.path.insert(0, '/home/xz/Dev/Dream')
-from model.dataset import WgisdDataset
+from dataset import WgisdDataset
 from model.segment_anything import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor, build_sam, build_sam_vit_b, build_sam_vit_h, build_sam_vit_l
 from model.point_decoder import PointDecoder
 import torch.nn.functional as F
 import torch.nn as nn
+import wandb
+import time
 
 BATCH_SIZE = 4
-ROOT_DIR = 'data/berry_dataset/'
+ROOT_DIR = '/home/xz/Dev/Dream/data/berry_dataset/'
 
 
 # TODO: change loss and point numbers
@@ -34,8 +36,19 @@ def main():
     optimizer = torch.optim.AdamW(list(point_mask_decoder.parameters()), lr=0.0001, weight_decay=0.0)
     mseloss=nn.MSELoss()
 
-    num_epochs = 1000
+     
+    wandb.login()
+
+    run = wandb.init(
+        # Set the project where this run will be logged
+        project="Vivid",
+        name='pseco1',
+        tags=['init']
+    )
+    num_epochs = 10
+    print(f'===Start===')
     for epoch in range(num_epochs):
+        
         point_mask_decoder.train()
         running_loss = 0.0
 
@@ -57,25 +70,32 @@ def main():
 
             running_loss += loss.item()
 
-        print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {running_loss / len(train_loader)}.3f")
 
         # Validation phase
         point_mask_decoder.eval()
         val_loss = 0.0
         with torch.no_grad():
-            for imgs, heatmaps in val_loader:
-                imgs = imgs.to(device)
-                gt_heatmaps = heatmaps.to(device)
+            for val_imgs, val_heatmaps in val_loader:
+                val_imgs = imgs.to(device)
+                val_gt_heatmaps = heatmaps.to(device)
 
-                features = sam.image_encoder(imgs)
-                pred_heatmaps = point_mask_decoder(features)['pred_heatmaps']
-                loss = mseloss(pred_heatmaps, gt_heatmaps)
+                val_features = sam.image_encoder(val_imgs)
+                val_pred_heatmaps = point_mask_decoder(val_features)['pred_heatmaps']
+                loss = mseloss(val_pred_heatmaps, val_gt_heatmaps)
                 val_loss += loss.item()
 
-        print(f"Validation Loss: {val_loss / len(val_loader)}")
+        print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {running_loss / len(train_loader)}, Validation Loss: {val_loss / len(val_loader)}")
 
-    print("Training complete")
-    torch.save(point_mask_decoder.state_dict(), 'decoder.pth')
+        wandb.log({
+                "Train":running_loss / len(train_loader),
+                "Val": val_loss / len(val_loader),
+            }, step=epoch)
+
+    wandb.finish()
+    current_timestamp = time.time()
+    time_stamp= time.strftime("%m-%d-%H:%M:%S", time.localtime(current_timestamp))
+    filename = f'/home/xz/Dev/Dream/weights/final_decoder_{time_stamp}.pth'
+    torch.save(point_mask_decoder.state_dict(), filename)
     
 
 if __name__ == '__main__':

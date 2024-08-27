@@ -16,7 +16,7 @@ def _split_phases(folder, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
     @return names in list without suffix
     '''
     assert train_ratio + val_ratio + test_ratio == 1.0, "ratio sum must be 1"
-
+    print(f'===Split dataset: train-{train_ratio}; val-{val_ratio}; test-{test_ratio}')
     all_files = os.listdir(folder)
     all_files = [os.path.splitext(file)[0] for file in all_files if os.path.isfile(os.path.join(folder, file))]
     random.shuffle(all_files)
@@ -127,7 +127,7 @@ def _visualize(img_tensor, keypoints):
 #     return heatmaps.float()
 
 
-def _create_heatmap(img, points, heatmap_size=(256, 256), sigma=1.0, scale=8, normalize=True):
+def _create_heatmap( points, heatmap_size=(256, 256), sigma=1.0, scale=8, normalize=True):
     """
     Generate a heatmap for crowd counting tasks.
     
@@ -161,7 +161,6 @@ def _create_heatmap(img, points, heatmap_size=(256, 256), sigma=1.0, scale=8, no
     if normalize:
         heatmap /= heatmap.max()
 
-    img = transforms.Resize(heatmap_size)(img)
     return heatmap.float()
 
 
@@ -220,9 +219,16 @@ class VividDataset(Dataset):
 
         img, keypoints = _convert(img, keypoints)
 
-        heatmap = _create_heatmap(img, keypoints)
+        img = transforms.Resize((256, 256))(img)
+        heatmap = _create_heatmap(keypoints)
         return img, heatmap
         
+def make_dataset(root_dir):
+    img_root = os.path.join(root_dir, 'images')
+    train_files, val_files, test_files = _split_phases(img_root)
+    train_dataset, test_dataset, val_dataset = VividDataset(root_dir, train_files), VividDataset(root_dir, test_files), VividDataset(root_dir, val_files)
+    return {'train': train_dataset, 'test': test_dataset, 'val': val_dataset}
+
 
 
 if __name__ == '__main__':

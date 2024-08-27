@@ -49,7 +49,8 @@ def _nms(heat, kernel=3):
 
 
 def plot_results(image, masks: torch.Tensor = None, points: torch.Tensor = None, bboxes: torch.Tensor = None,
-                 show_num=False, alpha=0.35):
+                 show_num=False, alpha=0.35, figsize=(40, 40)):
+    plt.figure(figsize=figsize) 
     plt.imshow(image)
 
     if masks is not None:
