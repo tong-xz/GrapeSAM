@@ -57,12 +57,14 @@ def main():
             imgs = imgs.to(device)
             gt_heatmaps = heatmaps.to(device)
 
+            import pdb; pdb.set_trace()
             # 冻结encoder参数
             with torch.no_grad():
                 features = sam.image_encoder(imgs) # torch.Size([16, 256, 64, 64])
             
             # 训练decoder
             optimizer.zero_grad()
+            import pdb; pdb.set_trace()
             pred_heatmaps = point_mask_decoder(features)['pred_heatmaps']
 
             loss = mseloss(pred_heatmaps, gt_heatmaps)

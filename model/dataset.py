@@ -7,6 +7,7 @@ from PIL import Image
 import torch.nn.functional as F
 from matplotlib import pyplot as plt
 import torch
+from torch.utils.data import DataLoader
 
 
 def _split_phases(folder, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
@@ -16,7 +17,7 @@ def _split_phases(folder, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
     @return names in list without suffix
     '''
     assert train_ratio + val_ratio + test_ratio == 1.0, "ratio sum must be 1"
-    print(f'===Split dataset: train-{train_ratio}; val-{val_ratio}; test-{test_ratio}')
+    print(f'---Split dataset: train-{train_ratio}; val-{val_ratio}; test-{test_ratio}')
     all_files = os.listdir(folder)
     all_files = [os.path.splitext(file)[0] for file in all_files if os.path.isfile(os.path.join(folder, file))]
     random.shuffle(all_files)
@@ -161,6 +162,8 @@ def _create_heatmap( points, heatmap_size=(256, 256), sigma=1.0, scale=8, normal
     if normalize:
         heatmap /= heatmap.max()
 
+    heatmap=heatmap.squeeze(1)
+
     return heatmap.float()
 
 
@@ -219,15 +222,28 @@ class VividDataset(Dataset):
 
         img, keypoints = _convert(img, keypoints)
 
-        img = transforms.Resize((256, 256))(img)
+        img = transforms.Resize((1024, 1024))(img)
         heatmap = _create_heatmap(keypoints, sigma=1)
         return img, heatmap
         
-def make_dataset(root_dir):
+
+def build_loader(root_dir, batch_size):
+    '''
+    the only function exposed to the outer class to build dataloaders
+
+    @param ROOT_DIR root dir of the entire dataset
+    @param BATCH_SIZE 
+    @return dict: three respective dataloaders
+    '''
     img_root = os.path.join(root_dir, 'images')
     train_files, val_files, test_files = _split_phases(img_root)
     train_dataset, test_dataset, val_dataset = VividDataset(root_dir, train_files), VividDataset(root_dir, test_files), VividDataset(root_dir, val_files)
-    return {'train': train_dataset, 'test': test_dataset, 'val': val_dataset}
+
+    # loader
+    train_loader = DataLoader(train_dataset, batch_size, shuffle=True, num_workers=12, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size, shuffle=True, num_workers=12, pin_memory=True)
+    test_loader =  DataLoader(test_dataset, batch_size, shuffle=True, num_workers=12, pin_memory=True)
+    return {'train': train_loader, 'val': val_loader, 'test': test_loader}
 
 
 if __name__ == '__main__':
