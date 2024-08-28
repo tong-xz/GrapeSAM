@@ -8,8 +8,11 @@ import torch
 import  matplotlib.pyplot as plt
 import cv2
 import torch.nn.functional as  F
-from .ops.utils import rescale_img_points
-from .ops.utils import create_heatmap
+
+import sys
+sys.path.insert(0, '/home/xz/Dev/Dream')
+from model.ops.utils import rescale_img_points
+from model.ops.utils import create_heatmap
 
 
 class RedoDataset(Dataset):
