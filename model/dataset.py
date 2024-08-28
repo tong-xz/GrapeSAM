@@ -220,7 +220,7 @@ class VividDataset(Dataset):
         img, keypoints = _convert(img, keypoints)
 
         img = transforms.Resize((256, 256))(img)
-        heatmap = _create_heatmap(keypoints)
+        heatmap = _create_heatmap(keypoints, sigma=1)
         return img, heatmap
         
 def make_dataset(root_dir):
@@ -230,11 +230,10 @@ def make_dataset(root_dir):
     return {'train': train_dataset, 'test': test_dataset, 'val': val_dataset}
 
 
-
 if __name__ == '__main__':
-    root = '/home/xz/Dev/Dream/data/images'
+    root = '/home/xz/Dev/Dream/data/vivid/images'
     train_files, val_files, test_files = _split_phases(root)
-    v = VividDataset('/home/xz/Dev/Dream/data', file_list=train_files)
+    v = VividDataset('/home/xz/Dev/Dream/data/vivid', file_list=train_files)
 
     img, map = v[0]
     visualize_img_and_heatmap(img, map)
