@@ -207,7 +207,7 @@ def visualize_img_and_heatmap(img, heatmap):
 
 
 class VividDataset(Dataset):
-    def __init__(self, data_root, file_list) -> None:
+    def __init__(self, data_root, file_list, mode='train') -> None:
         super(VividDataset, self).__init__()
         self.data_root = data_root
         self.img_path = os.path.join(data_root, 'images')
@@ -217,6 +217,7 @@ class VividDataset(Dataset):
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
+        self.mode = mode
     
     def __len__(self):
         return len(self.file_list)
@@ -229,12 +230,16 @@ class VividDataset(Dataset):
         if self.img_transform:
             img = self.img_transform(img)
         keypoints = np.load(dot_ann_path) #np.ndarray: (n, 2)
+        
+        if self.mode == 'train':
+            img, keypoints = _convert(img, keypoints)
+            img = transforms.Resize((1024, 1024))(img)
+            heatmap = _create_heatmap(keypoints, sigma=1)
+            return img, heatmap
+        else:
+            return img, keypoints
 
-        img, keypoints = _convert(img, keypoints)
-
-        img = transforms.Resize((1024, 1024))(img)
-        heatmap = _create_heatmap(keypoints, sigma=1)
-        return img, heatmap
+        
         
 
 def build_loader(root_dir, batch_size):
