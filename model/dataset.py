@@ -10,16 +10,18 @@ import torch
 from torch.utils.data import DataLoader
 
 
-def _split_phases(folder, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
+def _split_phases(root_dir, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
     '''
-    Define filenames for Train; Test; Validation phases
-    @param folder: img folder or ann folder both work
-    @return names in list without suffix
+    Define filenames for Train; Test; Validation phases and store in three respective .txt files
+    @param folder: root directory of the dataset
+    @return names in list without suffix 
     '''
     assert train_ratio + val_ratio + test_ratio == 1.0, "ratio sum must be 1"
-    print(f'---Split dataset: train-{train_ratio}; val-{val_ratio}; test-{test_ratio}')
-    all_files = os.listdir(folder)
-    all_files = [os.path.splitext(file)[0] for file in all_files if os.path.isfile(os.path.join(folder, file))]
+    print(f'---Split dataset: train-{train_ratio}; val-{val_ratio}; test-{test_ratio}---')
+
+    img_dir = os.path.join(root_dir, 'images')
+    all_files = os.listdir(img_dir)
+    all_files = [os.path.splitext(file)[0] for file in all_files if os.path.isfile(os.path.join(img_dir, file))]
     random.shuffle(all_files)
     
     total_files = len(all_files)
@@ -29,6 +31,14 @@ def _split_phases(folder, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
     train_files = all_files[:train_split_index]
     val_files = all_files[train_split_index:val_split_index]
     test_files = all_files[val_split_index:]
+
+    # create and write list in .txt files
+    txt_file_lists = {'train.txt': train_files, 'val.txt': val_files, 'test.txt': test_files}
+    for k, v in txt_file_lists.items():
+        txt_path = os.path.join(root_dir, k)
+        with open(txt_path, 'w') as f:
+            for item in v:
+                f.write(f'{item}\n')
     
     return train_files, val_files, test_files
 
@@ -247,10 +257,10 @@ def build_loader(root_dir, batch_size):
 
 
 if __name__ == '__main__':
-    root = '/home/xz/Dev/Dream/data/vivid/images'
+    root = '/home/xz/Dev/Dream/data/vivid/'
     train_files, val_files, test_files = _split_phases(root)
-    v = VividDataset('/home/xz/Dev/Dream/data/vivid', file_list=train_files)
+    # v = VividDataset('/home/xz/Dev/Dream/data/vivid', file_list=train_files)
 
-    img, map = v[0]
-    visualize_img_and_heatmap(img, map)
-    print(v[10])
+    # img, map = v[0]
+    # visualize_img_and_heatmap(img, map)
+    # print(v[10])
