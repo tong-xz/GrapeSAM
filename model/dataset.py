@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from matplotlib import pyplot as plt
 import torch
 from torch.utils.data import DataLoader
+from util import visualize_img_and_heatmap
 
 
 def _split_phases(root_dir, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
@@ -80,27 +81,42 @@ def _convert(img, keypoints, target_size=(2048, 2048)):
     return img, keypoints
 
 
-def _visualize(img_tensor, keypoints):
+
+def random_crop(img, keypoints, crop_size=(1024, 1024)):
     """
-    For annotation visualization
-    Visualize a tensor image with keypoints.
-    """
-    # Convert tensor to numpy format for visualization
-    img_array = img_tensor.permute(1, 2, 0).numpy()  # Convert from (C, H, W) to (H, W, C)
+    Randomly crop the image and keypoints to a specified size.
     
-    # Normalize the image to [0, 1] range if it has been standardized
-    img_array = img_array * np.array([0.229, 0.224, 0.225]) + np.array([0.485, 0.456, 0.406])
-    img_array = np.clip(img_array, 0, 1)
+    :param img: Tensor image of shape (C, H, W)
+    :param keypoints: Numpy array of shape (N, 2), where N is the number of keypoints and each keypoint is (x, y)
+    :param crop_size: Tuple (height, width) specifying the size of the random crop
+    :return: Cropped image tensor, adjusted keypoints numpy array
+    """
+    
+    _, original_height, original_width = img.shape
+    crop_height, crop_width = crop_size
+    
+    # Ensure crop size is not larger than the original image size
+    assert crop_height <= original_height and crop_width <= original_width, "Crop size must be smaller than image size"
+    
+    # Randomly choose top-left corner for the crop
+    top = random.randint(0, original_height - crop_height)
+    left = random.randint(0, original_width - crop_width)
+    
+    # Crop the image
+    img = img[:, top:top + crop_height, left:left + crop_width]
+    
+    # Adjust keypoints based on the crop
+    keypoints[:, 0] -= left  # Adjust x coordinates
+    keypoints[:, 1] -= top   # Adjust y coordinates
 
-    fig, ax = plt.subplots()
-    ax.imshow(img_array)
+    # Remove keypoints that are outside the crop
+    valid_indices = (keypoints[:, 0] >= 0) & (keypoints[:, 0] <= crop_width) & \
+                    (keypoints[:, 1] >= 0) & (keypoints[:, 1] <= crop_height)
+    keypoints = keypoints[valid_indices]
+    
+    return img, keypoints
 
-    # Plot keypoints
-    x, y = keypoints[:, 0], keypoints[:, 1]
-    ax.scatter(x, y, c='r', s=10)  
 
-    plt.axis('off')  
-    plt.show()
 
 
 # def _create_heatmap(img, points, heatmap_size=(256, 256)):
@@ -138,7 +154,7 @@ def _visualize(img_tensor, keypoints):
 #     return heatmaps.float()
 
 
-def _create_heatmap( points, heatmap_size=(256, 256), sigma=1.0, scale=8, normalize=True):
+def _create_heatmap( points, img_size, heatmap_size=(256, 256), sigma=1.0, normalize=True):
     """
     Generate a heatmap for crowd counting tasks.
     
@@ -146,10 +162,14 @@ def _create_heatmap( points, heatmap_size=(256, 256), sigma=1.0, scale=8, normal
     :param points: Array of points (N, 2)
     :param heatmap_size: Size of the heatmap (height, width)
     :param sigma: Standard deviation for Gaussian kernel
-    :param scale: Scale factor to downsize points
+    :param scale: Scale factor to downsize points # 2048 / 8 = 256
     :param normalize: Whether to normalize the heatmap
     :return: Heatmap tensor
     """
+    assert isinstance(img_size, tuple) and img_size[0]==img_size[1], "img_size type should be tuple and square shape"
+    scale = img_size[0]/heatmap_size[0] # 2048/256 = 8
+
+
     if not isinstance(sigma, torch.Tensor):
         sigma = torch.ones(len(points)) * sigma
 
@@ -177,37 +197,10 @@ def _create_heatmap( points, heatmap_size=(256, 256), sigma=1.0, scale=8, normal
     return heatmap.float()
 
 
-def visualize_img_and_heatmap(img, heatmap):
-    """
-    Visualize an image and its corresponding heatmap side by side.
-
-    :param img: Tensor image of shape (C, H, W)
-    :param heatmap: Heatmap tensor of shape (1, H, W)
-    """
-    img_np = img.permute(1, 2, 0).numpy()  # 转换为 (H, W, C) 形式
-
-    mean = np.array([0.485, 0.456, 0.406])
-    std = np.array([0.229, 0.224, 0.225])
-    img_np = img_np * std + mean
-    img_np = np.clip(img_np, 0, 1)  
-
-
-    heatmap_np = heatmap.squeeze().numpy()  
-    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
-
-    axs[0].imshow(img_np)
-    axs[0].set_title('Image')
-    axs[0].axis('off')  
-
-    axs[1].imshow(heatmap_np, cmap='hot')  # 使用 'hot' colormap 来显示热力图
-    axs[1].set_title('Heatmap')
-    axs[1].axis('off')  
-    plt.show()
-
 
 
 class VividDataset(Dataset):
-    def __init__(self, data_root, file_list, mode='train') -> None:
+    def __init__(self, data_root, file_list, mode='train', use_random_crop=False) -> None:
         super(VividDataset, self).__init__()
         self.data_root = data_root
         self.img_path = os.path.join(data_root, 'images')
@@ -218,6 +211,7 @@ class VividDataset(Dataset):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
         self.mode = mode
+        self.use_random_crop = use_random_crop
     
     def __len__(self):
         return len(self.file_list)
@@ -230,16 +224,21 @@ class VividDataset(Dataset):
         if self.img_transform:
             img = self.img_transform(img)
         keypoints = np.load(dot_ann_path) #np.ndarray: (n, 2)
-        
-        if self.mode == 'train':
-            img, keypoints = _convert(img, keypoints)
-            img = transforms.Resize((1024, 1024))(img)
-            heatmap = _create_heatmap(keypoints, sigma=1)
-            return img, heatmap
-        else:
-            return img, keypoints
 
-        
+        if self.use_random_crop:
+            if self.mode == 'train':
+                img, keypoints = _convert(img, keypoints, target_size=(2048, 2048)) # maybe larger img size
+                img, keypoints =random_crop(img, keypoints, crop_size=(1024, 1024))
+                heatmap = _create_heatmap(keypoints, img_size=(1024, 1024),sigma=1)
+                return img, heatmap, keypoints
+            else:
+                pass
+        else:
+            target_img_size = (1024, 1024)
+            img, keypoints = _convert(img, keypoints, target_img_size)
+            heatmap = _create_heatmap(keypoints, img_size=target_img_size, sigma=1)
+            return img, heatmap, keypoints
+
         
 
 def build_loader(root_dir, batch_size):
@@ -250,8 +249,7 @@ def build_loader(root_dir, batch_size):
     @param BATCH_SIZE 
     @return dict: three respective dataloaders
     '''
-    img_root = os.path.join(root_dir, 'images')
-    train_files, val_files, test_files = _split_phases(img_root)
+    train_files, val_files, test_files = _split_phases(root_dir)
     train_dataset, test_dataset, val_dataset = VividDataset(root_dir, train_files), VividDataset(root_dir, test_files), VividDataset(root_dir, val_files)
 
     # loader
@@ -264,8 +262,8 @@ def build_loader(root_dir, batch_size):
 if __name__ == '__main__':
     root = '/home/xz/Dev/Dream/data/vivid/'
     train_files, val_files, test_files = _split_phases(root)
-    # v = VividDataset('/home/xz/Dev/Dream/data/vivid', file_list=train_files)
+    v = VividDataset('/home/xz/Dev/Dream/data/vivid', file_list=train_files, use_random_crop=True)
 
-    # img, map = v[0]
-    # visualize_img_and_heatmap(img, map)
-    # print(v[10])
+    img, map, kps= v[0]
+    visualize_img_and_heatmap(img, map, kps)
+    print(img.shape, map.shape)

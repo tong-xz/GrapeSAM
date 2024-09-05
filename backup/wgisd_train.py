@@ -56,7 +56,7 @@ def main():
         for imgs, heatmaps in train_loader:
             imgs = imgs.to(device)
             gt_heatmaps = heatmaps.to(device)
-
+            
             import pdb; pdb.set_trace()
             # 冻结encoder参数
             with torch.no_grad():
@@ -64,7 +64,6 @@ def main():
             
             # 训练decoder
             optimizer.zero_grad()
-            import pdb; pdb.set_trace()
             pred_heatmaps = point_mask_decoder(features)['pred_heatmaps']
 
             loss = mseloss(pred_heatmaps, gt_heatmaps)

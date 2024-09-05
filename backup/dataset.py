@@ -24,7 +24,7 @@ class WgisdDataset(Dataset):
         return len(self.img_list)
 
     #TODO changeable sigma
-    def _create_heatmap(self, points,heatmap_size=(256, 256)):
+    def _create_heatmap(self, points, heatmap_size=(256, 256)):
         sigma=1
         scale = 8 # 2048 / 8 = 256
         # 检查 sigma 是否是 torch.Tensor 类型

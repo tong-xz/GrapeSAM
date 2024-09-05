@@ -7,24 +7,16 @@ import numpy as np
 from PIL import Image
 from model import VividDataset
 
-def open_img(img_path):
-    '''
-    read image from specific path and turn into tensors
-    @param path of specific image
-    @return tensor of the image
-    '''
-    img_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-    img = Image.open(img_path).convert('RGB')
+def calculate_MAE(gt_points, pred_points):
+    pass
 
+def calculate_MSE(gt_points, pred_points):
+    pass
 
 def main(args):
     # prepare dataset and everything
     root_dir, ckp_path = args.root_dir, args.ckp_path
     test_txt_file = os.path.join(root_dir, 'test.txt')
-    img_dir, npy_dir = os.path.join(root_dir, 'images'), os.path.join(root_dir, 'anns')
 
     with open(test_txt_file, 'r') as f:
         test_list = [line.strip() for line in f]
@@ -42,6 +34,8 @@ def main(args):
 
         with torch.inference_mode():
             features = sam.image_encoder(img).to(device)
+            #TODO tune these parameters to see the best effect
+
             point_mask_decoder.max_points = 512
             point_mask_decoder.nms_kernel_size = 3
             point_mask_decoder.point_threshold = 0.2
@@ -49,9 +43,9 @@ def main(args):
             pred_points = pred['pred_points'].squeeze()
 
             # compare difference with gt and prediciton
+            #TODO implement MAE MSE here
 
 
-    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Test script arguments')

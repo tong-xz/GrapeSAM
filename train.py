@@ -14,6 +14,9 @@ from model import build_loader
 import time
 
 
+def set_seed(seed: int=1):
+    pass
+
 def train(config):
     # build dataloader
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -42,18 +45,20 @@ def train(config):
         point_mask_decoder.train()
         running_loss = 0.0
 
-        for imgs, heatmaps in train_loader:
+        for imgs, heatmaps, keypoints in train_loader:
             imgs = imgs.to(device) # imgs has to be torch.Size([b, 3, 1024, 1024]) 
-            gt_heatmaps = heatmaps.to(device)
+            tensor = torch.randn(4, 3, 512, 512).to(device)
 
-            # import pdb; pdb.set_trace()
+            gt_heatmaps = heatmaps.to(device) # ()
+
+            import pdb; pdb.set_trace()
             # 冻结encoder参数
             with torch.no_grad():
                 features = sam.image_encoder(imgs) # torch.Size([b, 256, 64, 64])
             
             # 训练decoder
             optimizer.zero_grad()
-            pred_heatmaps = point_mask_decoder(features)['pred_heatmaps']
+            pred_heatmaps = point_mask_decoder(features)['pred_heatmaps'] # (b, 1, 256, 256)
             import pdb; pdb.set_trace()
             
             loss = mseloss(pred_heatmaps, gt_heatmaps)
@@ -108,7 +113,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', default=4, action='store', type=int, required=True)
     parser.add_argument('--epoch_num', default=100, action='store', type=int, required=True)
-    parser.add_argument('--root_dir', default='./data/vivid', action='store', type=str, required=True)
+    parser.add_argument('--root_dir', default='./data/vivid', action='store', type=str)
     parser.add_argument('--wandb', action='store_true')
     
     args = parser.parse_args()
