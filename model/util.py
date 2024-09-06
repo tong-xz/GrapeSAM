@@ -49,24 +49,38 @@ def visualize_img_and_heatmap(img, heatmap=None, keypoints=None):
 
 
 
-def visualize(img_tensor, keypoints):
+def visualize_quadrants(quadrants):
     """
-    For annotation visualization
-    Visualize a tensor image with keypoints.
-    """
-    # Convert tensor to numpy format for visualization
-    img_array = img_tensor.permute(1, 2, 0).numpy()  # Convert from (C, H, W) to (H, W, C)
+    Visualize the four quadrants of the image in the order: 
+    top-left (1), top-right (2), bottom-left (3), bottom-right (4),
+    with reduced spacing between the images.
     
-    # Normalize the image to [0, 1] range if it has been standardized
-    img_array = img_array * np.array([0.229, 0.224, 0.225]) + np.array([0.485, 0.456, 0.406])
-    img_array = np.clip(img_array, 0, 1)
+    :param quadrants: Dictionary of 4 cropped quadrants with keys '1', '2', '3', '4'
+    """
+    # Convert quadrants to numpy arrays for visualization
+    quadrants_np = {k: v.permute(1, 2, 0).numpy() for k, v in quadrants.items()}  # (C, H, W) -> (H, W, C)
 
-    fig, ax = plt.subplots()
-    ax.imshow(img_array)
+    # Clip the data to ensure it's in the valid range for imshow
+    quadrants_np = {k: np.clip(v, 0, 1) if v.dtype == np.float32 else np.clip(v, 0, 255).astype(np.uint8) 
+                    for k, v in quadrants_np.items()}
 
-    # Plot keypoints
-    x, y = keypoints[:, 0], keypoints[:, 1]
-    ax.scatter(x, y, c='r', s=10)  
+    # Create a figure with 2 rows and 2 columns
+    fig, axs = plt.subplots(2, 2, figsize=(8, 8))
 
-    plt.axis('off')  
+    # Arrange the quadrants in the following order:
+    # Top-left -> Top-right -> Bottom-left -> Bottom-right
+    positions = [('1', 0, 0), ('2', 0, 1), ('3', 1, 0), ('4', 1, 1)]
+    
+    for idx, row, col in positions:
+        axs[row, col].imshow(quadrants_np[idx])
+        axs[row, col].set_title(f'{idx}', color='red')
+        axs[row, col].axis('off')  # Hide axes
+
+    # Adjust spacing between plots
+    plt.subplots_adjust(wspace=0.05, hspace=0.05)  # Reduce horizontal and vertical space
+
     plt.show()
+
+
+
+

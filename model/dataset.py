@@ -8,7 +8,8 @@ import torch.nn.functional as F
 from matplotlib import pyplot as plt
 import torch
 from torch.utils.data import DataLoader
-from .util import visualize_img_and_heatmap
+from util import visualize_img_and_heatmap, visualize_quadrants
+from util import restore_image_from_quadrants, visualize_restored_image
 
 
 def _split_phases(root_dir, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
@@ -115,6 +116,31 @@ def random_crop(img, keypoints, crop_size=(1024, 1024)):
     keypoints = keypoints[valid_indices]
     
     return img, keypoints
+
+
+def quad_crop(img, crop_size=(1024, 1024)):
+    """
+    Split the image into four non-overlapping 1024x1024 crops.
+    
+    :param img: Tensor image of shape (C, H, W)
+    :param crop_size: Tuple (height, width) specifying the size of each crop (default is 1024x1024)
+    :return: A dictionary of 4 cropped images
+    """
+    _, original_height, original_width = img.shape
+    crop_height, crop_width = crop_size
+    
+    # Ensure the image is 2048x2048 as expected
+    assert original_height == 2048 and original_width == 2048, "Source image must be 2048x2048"
+
+    # Split the image into 4 crops: top-left, top-right, bottom-left, bottom-right
+    crops = {
+        '1': img[:, :crop_height, :crop_width],        # Top-left
+        '2': img[:, :crop_height, crop_width:],        # Top-right
+        '3': img[:, crop_height:, :crop_width],        # Bottom-left
+        '4': img[:, crop_height:, crop_width:],        # Bottom-right
+    }
+    return crops
+
 
 
 
@@ -227,16 +253,20 @@ class VividDataset(Dataset):
 
         # random crop images
         if self.use_random_crop:
+            img, keypoints = _convert(img, keypoints, target_size=(2048, 2048)) # maybe larger img size
             if self.mode == 'train':
-                img, keypoints = _convert(img, keypoints, target_size=(2048, 2048)) # maybe larger img size
                 img, keypoints =random_crop(img, keypoints, crop_size=(1024, 1024))
                 heatmap = _create_heatmap(keypoints, img_size=(1024, 1024),sigma=1)
                 del keypoints
                 return img, heatmap
-            else:
-                #TODO add crop code when testing
-                pass
             
+            elif self.mode == 'test':
+                img_dict = quad_crop(img)
+                return img_dict, keypoints
+            
+            else:
+                raise NotImplementedError('Please use right mode code')
+
         # use original whole image
         else:
             target_img_size = (1024, 1024) # ViT can only take (1024, 1024) image
@@ -245,8 +275,12 @@ class VividDataset(Dataset):
             if self.mode == 'train':
                 del keypoints
                 return img, heatmap
-            else:
+            
+            elif self.mode == 'test':
                 return img, keypoints
+            
+            else:
+                raise NotImplementedError('Please use right mode code')
 
         
 
@@ -271,8 +305,10 @@ def build_loader(root_dir, batch_size):
 if __name__ == '__main__':
     root = '/home/xz/Dev/Dream/data/vivid/'
     train_files, val_files, test_files = _split_phases(root)
-    v = VividDataset('/home/xz/Dev/Dream/data/vivid', file_list=train_files)
+    v = VividDataset('/home/xz/Dev/Dream/data/vivid', file_list=train_files, mode='test', use_random_crop=True)
 
     img, map= v[0]
-    visualize_img_and_heatmap(img, map)
-    print(img.shape, map.shape)
+    img = restore_image_from_quadrants(img)
+    visualize_restored_image(img)
+    # visualize_img_and_heatmap(img, map)
+    # visualize_quadrants(img)
