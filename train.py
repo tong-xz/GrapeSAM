@@ -12,6 +12,7 @@ from datetime import datetime
 import argparse
 from model import build_loader
 import time
+import os
 
 
 def set_seed(seed: int=1):
@@ -19,15 +20,24 @@ def set_seed(seed: int=1):
 
 def train(config):
     # build dataloader
+    BATCH_SIZE = config['batch_size']
+    EPOCH_NUM = config['epoch_num']
+    ROOT_DIR = config['root_dir']
+    USE_WANDB = config['wandb']
+    SAVE_DIR = config['save_dir']
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    BATCH_SIZE, EPOCH_NUM, ROOT_DIR, USE_WANDB = config['batch_size'], config['epoch_num'], config['root_dir'], config['wandb']
+
     loader_dict = build_loader(root_dir=ROOT_DIR, batch_size=BATCH_SIZE)
     train_loader, val_loader, test_loader = loader_dict['train'], loader_dict['val'], loader_dict['test']
 
     # initialize sam related vairables
     sam = build_sam_vit_h().to(device).eval()
-    point_mask_decoder = PointDecoder(sam).to(device)
-    optimizer = torch.optim.AdamW(list(point_mask_decoder.parameters()), lr=0.0001, weight_decay=0.0)
+    point_decoder = PointDecoder(sam).to(device)
+
+    n_parameters = sum(p.numel() for p in point_decoder.parameters() if p.requires_grad)
+    print("---Decoder Parameters: %.2fM" % (n_parameters / 1e6,))
+
+    optimizer = torch.optim.AdamW(list(point_decoder.parameters()), lr=0.0001, weight_decay=0.0)
     mseloss=nn.MSELoss()
 
     if USE_WANDB:
@@ -42,24 +52,20 @@ def train(config):
 
     # start training
     for epoch in range(EPOCH_NUM):
-        point_mask_decoder.train()
+        point_decoder.train()
         running_loss = 0.0
 
-        for imgs, heatmaps, keypoints in train_loader:
+        for imgs, heatmaps in train_loader:
             imgs = imgs.to(device) # imgs has to be torch.Size([b, 3, 1024, 1024]) 
-            tensor = torch.randn(4, 3, 512, 512).to(device)
-
             gt_heatmaps = heatmaps.to(device) # ()
 
-            import pdb; pdb.set_trace()
             # 冻结encoder参数
             with torch.no_grad():
                 features = sam.image_encoder(imgs) # torch.Size([b, 256, 64, 64])
             
             # 训练decoder
             optimizer.zero_grad()
-            pred_heatmaps = point_mask_decoder(features)['pred_heatmaps'] # (b, 1, 256, 256)
-            import pdb; pdb.set_trace()
+            pred_heatmaps = point_decoder(features)['pred_heatmaps'] # (b, 1, 256, 256)
             
             loss = mseloss(pred_heatmaps, gt_heatmaps)
             loss.backward()
@@ -69,7 +75,7 @@ def train(config):
 
        
         # Validation phase
-        point_mask_decoder.eval()
+        point_decoder.eval()
         val_loss = 0.0
         with torch.no_grad():
             for imgs, heatmaps in val_loader:
@@ -77,7 +83,7 @@ def train(config):
                 gt_heatmaps = heatmaps.to(device)
 
                 features = sam.image_encoder(imgs)
-                pred_heatmaps = point_mask_decoder(features)['pred_heatmaps']
+                pred_heatmaps = point_decoder(features)['pred_heatmaps']
                 loss = mseloss(pred_heatmaps, gt_heatmaps)
                 val_loss += loss.item()
 
@@ -92,18 +98,18 @@ def train(config):
     wandb.finish()
     print("Training complete")
     
-
+    # save checkpoint
     current_timestamp = time.time()
     time_stamp= time.strftime("%m-%d-%H:%M:%S", time.localtime(current_timestamp))
-    filename = f'./weights/final_decoder_{time_stamp}.pth'
-    torch.save(point_mask_decoder.state_dict(), filename)
+    ckp_save_path = os.path.join(SAVE_DIR, f'point_decoder_{time_stamp}.pth')
+    torch.save(point_decoder.state_dict(), ckp_save_path)
 
 
 
 def main(config):
     print(f'===========================START============================')
     for k,v in config.items():
-        print(f'---Setting {k} as {v}')
+        print(f'---SETTING {k} AS {v}')
     #TODO split train and eval to two functions
     train(config)
     print(f'===========================FINISH===========================')
@@ -114,6 +120,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=4, action='store', type=int, required=True)
     parser.add_argument('--epoch_num', default=100, action='store', type=int, required=True)
     parser.add_argument('--root_dir', default='./data/vivid', action='store', type=str)
+    parser.add_argument('--save_dir', default='./weights', action='store', type=str)
+    parser.add_argument('--use_crop', action='store_true')
     parser.add_argument('--wandb', action='store_true')
     
     args = parser.parse_args()

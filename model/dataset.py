@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from matplotlib import pyplot as plt
 import torch
 from torch.utils.data import DataLoader
-from util import visualize_img_and_heatmap
+from .util import visualize_img_and_heatmap
 
 
 def _split_phases(root_dir, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
@@ -18,7 +18,7 @@ def _split_phases(root_dir, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
     @return names in list without suffix 
     '''
     assert train_ratio + val_ratio + test_ratio == 1.0, "ratio sum must be 1"
-    print(f'---Split dataset: train-{train_ratio}; val-{val_ratio}; test-{test_ratio}---')
+    print(f'---Split dataset: train-{train_ratio}; val-{val_ratio}; test-{test_ratio}')
 
     img_dir = os.path.join(root_dir, 'images')
     all_files = os.listdir(img_dir)
@@ -225,19 +225,28 @@ class VividDataset(Dataset):
             img = self.img_transform(img)
         keypoints = np.load(dot_ann_path) #np.ndarray: (n, 2)
 
+        # random crop images
         if self.use_random_crop:
             if self.mode == 'train':
                 img, keypoints = _convert(img, keypoints, target_size=(2048, 2048)) # maybe larger img size
                 img, keypoints =random_crop(img, keypoints, crop_size=(1024, 1024))
                 heatmap = _create_heatmap(keypoints, img_size=(1024, 1024),sigma=1)
-                return img, heatmap, keypoints
+                del keypoints
+                return img, heatmap
             else:
+                #TODO add crop code when testing
                 pass
+            
+        # use original whole image
         else:
-            target_img_size = (1024, 1024)
-            img, keypoints = _convert(img, keypoints, target_img_size)
-            heatmap = _create_heatmap(keypoints, img_size=target_img_size, sigma=1)
-            return img, heatmap, keypoints
+            target_img_size = (1024, 1024) # ViT can only take (1024, 1024) image
+            img, keypoints = _convert(img, keypoints, target_img_size) # resize to target size
+            heatmap = _create_heatmap(keypoints, img_size=target_img_size, sigma=1) # (1, 256, 256) make heatmap based on the img and points 
+            if self.mode == 'train':
+                del keypoints
+                return img, heatmap
+            else:
+                return img, keypoints
 
         
 
@@ -262,8 +271,8 @@ def build_loader(root_dir, batch_size):
 if __name__ == '__main__':
     root = '/home/xz/Dev/Dream/data/vivid/'
     train_files, val_files, test_files = _split_phases(root)
-    v = VividDataset('/home/xz/Dev/Dream/data/vivid', file_list=train_files, use_random_crop=True)
+    v = VividDataset('/home/xz/Dev/Dream/data/vivid', file_list=train_files)
 
-    img, map, kps= v[0]
-    visualize_img_and_heatmap(img, map, kps)
+    img, map= v[0]
+    visualize_img_and_heatmap(img, map)
     print(img.shape, map.shape)
