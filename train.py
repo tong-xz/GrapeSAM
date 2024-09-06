@@ -101,6 +101,7 @@ def train(config):
     # save checkpoint
     current_timestamp = time.time()
     time_stamp= time.strftime("%m-%d-%H:%M:%S", time.localtime(current_timestamp))
+    os.makedirs(SAVE_DIR, exist_ok=True)
     ckp_save_path = os.path.join(SAVE_DIR, f'point_decoder_{time_stamp}.pth')
     torch.save(point_decoder.state_dict(), ckp_save_path)
 
@@ -121,7 +122,7 @@ if __name__ == '__main__':
     parser.add_argument('--epoch_num', default=100, action='store', type=int, required=True)
     parser.add_argument('--root_dir', default='./data/vivid', action='store', type=str)
     parser.add_argument('--save_dir', default='./weights', action='store', type=str)
-    parser.add_argument('--use_crop', action='store_true')
+    parser.add_argument('--use_crop', action='store_true', help='specify whether use random crop images for training')
     parser.add_argument('--wandb', action='store_true')
     
     args = parser.parse_args()
