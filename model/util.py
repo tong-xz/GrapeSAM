@@ -1,8 +1,120 @@
 import numpy as np
 from matplotlib import pyplot as plt
+import torch
+
+# ----------------SAM related--------------------------------
+
+def predict_masks_by_points(predictor, img: np.ndarray, points: torch.Tensor, device="cuda"):
+    """_summary_
+
+    Args:
+        predictor (_type_): predictor object created through SAM api
+        img (np.ndarray): np.ndarray (H, W, 3)
+        points (torch.Tensor): annotation points np.ndarray (N, 2)
+        device (str, optional): _description_. Defaults to "cuda".
+
+    Returns:
+        _type_: _description_
+    """
+
+    
+    if isinstance(points, np.ndarray):
+        points = torch.from_numpy(points).to(device)
+
+    points= points.unsqueeze(1)
+    transformed_points = predictor.transform.apply_coords_torch(points, img.shape[:2])
+    labels = torch.ones(points.shape[0], dtype= torch.long).unsqueeze(1).to(device)
+
+    predictor.set_image(img)
+    masks, scores, logits = predictor.predict_torch(
+        point_coords=transformed_points,
+        point_labels=labels,
+        boxes=None,
+        multimask_output=True,
+    )
+    return masks, scores, logits
 
 
 
+def show_all(image: np.ndarray, masks, save_path=None, dpi=200):
+    """_summary_
+
+    Args:
+        image (np.ndarray): img numpy array
+        masks (_type_): masks get from predictor
+        save_path (_type_, optional): _description_. Defaults to None.
+        dpi (int, optional): _description_. Defaults to 200.
+    """
+
+    plt.figure(figsize=(20, 10))
+    
+    # Left subplot: original image + masks
+    ax1 = plt.subplot(1, 2, 1)
+    ax1.imshow(image)
+    _show_masks(masks, ax1, random_colors=True, alpha=0.6)
+    ax1.axis('off')
+    ax1.set_title("Image with Masks")
+    
+    # Right subplot: masks only
+    ax2 = plt.subplot(1, 2, 2)
+    ax2.imshow(np.zeros_like(image))  
+    _show_masks(masks, ax2, random_colors=True, alpha=1.0)  # Use fully opaque masks
+    ax2.axis('off')
+    ax2.set_title(f"Berry Masks:{masks.shape[0]}")
+
+    # Adjust layout and save the figure
+    plt.tight_layout()
+    if save_path is not None:
+        plt.savefig(save_path, dpi=dpi)
+        print(f'Figure saved to {save_path}')
+
+    plt.show()    
+
+
+
+def _show_masks(masks, ax, random_colors=False, alpha=0.35):
+    if len(masks) == 0:
+        return
+    if masks.ndim == 3:
+        num_masks, h, w = masks.shape
+    elif masks.ndim == 4:
+        num_masks, _, h, w = masks.shape
+    else:
+        raise ValueError(f"Unexpected mask shape: {masks.shape}")
+    
+    # Create an RGBA image to store all masks
+    masks_image = np.zeros((h, w, 4), dtype=np.float32)
+    
+    # Set initial transparency to 0
+    masks_image[:, :, 3] = 0
+    
+    # Iterate over each mask and add to masks_image
+    for i in range(num_masks):
+        if random_colors:
+            color = np.concatenate([np.random.random(3), np.array([alpha])], axis=0)
+        else:
+            color = np.array([30/255, 144/255, 255/255, alpha])
+        
+        if masks.ndim == 4:
+            mask = masks[i, 0]  # Use the first channel
+        else:
+            mask = masks[i]
+        mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
+        
+        # Only update masks_image where the mask is True
+        mask_bool = mask > 0.5
+        masks_image[mask_bool] = mask_image[mask_bool]
+    
+    # Display the masks
+    ax.imshow(masks_image)
+
+
+
+
+
+
+
+# ----------------Visualization related--------------------------------
 def visualize_img_and_heatmap(img, heatmap=None, keypoints=None):
     """
     Visualize an image, its corresponding heatmap (if exists), and an image with keypoints (if exists) side by side.

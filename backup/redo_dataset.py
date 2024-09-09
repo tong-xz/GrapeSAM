@@ -37,10 +37,10 @@ class RedoDataset(Dataset):
         img = self.transform(img)
         keypoints = np.load(gd_path)
         #TODO add crop
-        img, keypoints = rescale_img_points(img, keypoints, img_target_size=(1024, 1024), point_target_size=(256, 256))
+        # img, keypoints = rescale_img_points(img, keypoints, img_target_size=(1024, 1024), point_target_size=(256, 256))
 
-        heatmap = create_heatmap(keypoints, kernel_size=3, sigma=0.5, img_size=(256, 256))
-        return img, heatmap
+        # heatmap = create_heatmap(keypoints, kernel_size=3, sigma=0.5, img_size=(256, 256))
+        return img,keypoints
 
 
     def visualize(self, idx, mode='ann'):
