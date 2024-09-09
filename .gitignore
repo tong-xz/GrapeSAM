@@ -10,7 +10,7 @@
 # raw/images/
 # raw/json/
 *
-!.*py
+!*.py
 !.gitignore
 !*.ipynb
 !*.md

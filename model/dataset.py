@@ -8,141 +8,166 @@ import torch.nn.functional as F
 from matplotlib import pyplot as plt
 import torch
 from torch.utils.data import DataLoader
-from util import visualize_img_and_heatmap, visualize_quadrants
-from util import restore_image_from_quadrants, visualize_restored_image
+from .util import visualize_img_and_heatmap, visualize_quadrants
+
+# from .util import restore_image_from_quadrants, visualize_restored_image
 
 
 def _split_phases(root_dir, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
-    '''
+    """
     Define filenames for Train; Test; Validation phases and store in three respective .txt files
     @param folder: root directory of the dataset
-    @return names in list without suffix 
-    '''
+    @return names in list without suffix
+    """
     assert train_ratio + val_ratio + test_ratio == 1.0, "ratio sum must be 1"
-    print(f'---Split dataset: train-{train_ratio}; val-{val_ratio}; test-{test_ratio}')
+    print(f"---Split dataset: train-{train_ratio}; val-{val_ratio}; test-{test_ratio}")
 
-    img_dir = os.path.join(root_dir, 'images')
+    img_dir = os.path.join(root_dir, "images")
     all_files = os.listdir(img_dir)
-    all_files = [os.path.splitext(file)[0] for file in all_files if os.path.isfile(os.path.join(img_dir, file))]
+    all_files = [
+        os.path.splitext(file)[0]
+        for file in all_files
+        if os.path.isfile(os.path.join(img_dir, file))
+    ]
     random.shuffle(all_files)
-    
+
     total_files = len(all_files)
     train_split_index = int(total_files * train_ratio)
     val_split_index = train_split_index + int(total_files * val_ratio)
-    
+
     train_files = all_files[:train_split_index]
     val_files = all_files[train_split_index:val_split_index]
     test_files = all_files[val_split_index:]
 
     # create and write list in .txt files
-    txt_file_lists = {'train.txt': train_files, 'val.txt': val_files, 'test.txt': test_files}
+    txt_file_lists = {
+        "train.txt": train_files,
+        "val.txt": val_files,
+        "test.txt": test_files,
+    }
     for k, v in txt_file_lists.items():
         txt_path = os.path.join(root_dir, k)
-        with open(txt_path, 'w') as f:
+        with open(txt_path, "w") as f:
             for item in v:
-                f.write(f'{item}\n')
-    
-    return train_files, val_files, test_files
+                f.write(f"{item}\n")
 
+    return train_files, val_files, test_files
 
 
 def _convert(img, keypoints, target_size=(2048, 2048)):
     """
     Resize the image tensor while maintaining aspect ratio, pad to target size, and adjust keypoints accordingly.
-    
+
     :param img: Tensor image of shape (C, H, W)
     :param keypoints: Numpy array of shape (N, 2), where N is the number of keypoints and each keypoint is (x, y)
     :param target_size: Desired output size as a tuple (target_height, target_width)
     :return: Resized and padded image tensor, adjusted keypoints numpy array
     """
-    
+
     _, original_height, original_width = img.shape
-    
+
     # Calculate the scale factor while maintaining aspect ratio
     scale = min(target_size[0] / original_height, target_size[1] / original_width)
-    
+
     # Calculate new size
     new_height = int(original_height * scale)
     new_width = int(original_width * scale)
 
-    img = F.interpolate(img.unsqueeze(0), size=(new_height, new_width), mode='bilinear', align_corners=False).squeeze(0)
+    img = F.interpolate(
+        img.unsqueeze(0),
+        size=(new_height, new_width),
+        mode="bilinear",
+        align_corners=False,
+    ).squeeze(0)
 
     keypoints = keypoints * scale
-    
+
     # Calculate padding
     pad_height = (target_size[0] - new_height) // 2
     pad_width = (target_size[1] - new_width) // 2
-    
+
     # Apply padding to the image
-    img = F.pad(img, (pad_width, target_size[1] - new_width - pad_width, pad_height, target_size[0] - new_height - pad_height))
+    img = F.pad(
+        img,
+        (
+            pad_width,
+            target_size[1] - new_width - pad_width,
+            pad_height,
+            target_size[0] - new_height - pad_height,
+        ),
+    )
 
     keypoints[:, 0] += pad_width  # Adjust x coordinates
-    keypoints[:, 1] += pad_height # Adjust y coordinates
-    
-    return img, keypoints
+    keypoints[:, 1] += pad_height  # Adjust y coordinates
 
+    return img, keypoints
 
 
 def random_crop(img, keypoints, crop_size=(1024, 1024)):
     """
     Randomly crop the image and keypoints to a specified size.
-    
+
     :param img: Tensor image of shape (C, H, W)
     :param keypoints: Numpy array of shape (N, 2), where N is the number of keypoints and each keypoint is (x, y)
     :param crop_size: Tuple (height, width) specifying the size of the random crop
     :return: Cropped image tensor, adjusted keypoints numpy array
     """
-    
+
     _, original_height, original_width = img.shape
     crop_height, crop_width = crop_size
-    
+
     # Ensure crop size is not larger than the original image size
-    assert crop_height <= original_height and crop_width <= original_width, "Crop size must be smaller than image size"
-    
+    assert (
+        crop_height <= original_height and crop_width <= original_width
+    ), "Crop size must be smaller than image size"
+
     # Randomly choose top-left corner for the crop
     top = random.randint(0, original_height - crop_height)
     left = random.randint(0, original_width - crop_width)
-    
+
     # Crop the image
-    img = img[:, top:top + crop_height, left:left + crop_width]
-    
+    img = img[:, top : top + crop_height, left : left + crop_width]
+
     # Adjust keypoints based on the crop
     keypoints[:, 0] -= left  # Adjust x coordinates
-    keypoints[:, 1] -= top   # Adjust y coordinates
+    keypoints[:, 1] -= top  # Adjust y coordinates
 
     # Remove keypoints that are outside the crop
-    valid_indices = (keypoints[:, 0] >= 0) & (keypoints[:, 0] <= crop_width) & \
-                    (keypoints[:, 1] >= 0) & (keypoints[:, 1] <= crop_height)
+    valid_indices = (
+        (keypoints[:, 0] >= 0)
+        & (keypoints[:, 0] <= crop_width)
+        & (keypoints[:, 1] >= 0)
+        & (keypoints[:, 1] <= crop_height)
+    )
     keypoints = keypoints[valid_indices]
-    
+
     return img, keypoints
 
 
 def quad_crop(img, crop_size=(1024, 1024)):
     """
     Split the image into four non-overlapping 1024x1024 crops.
-    
+
     :param img: Tensor image of shape (C, H, W)
     :param crop_size: Tuple (height, width) specifying the size of each crop (default is 1024x1024)
     :return: A dictionary of 4 cropped images
     """
     _, original_height, original_width = img.shape
     crop_height, crop_width = crop_size
-    
+
     # Ensure the image is 2048x2048 as expected
-    assert original_height == 2048 and original_width == 2048, "Source image must be 2048x2048"
+    assert (
+        original_height == 2048 and original_width == 2048
+    ), "Source image must be 2048x2048"
 
     # Split the image into 4 crops: top-left, top-right, bottom-left, bottom-right
     crops = {
-        '1': img[:, :crop_height, :crop_width],        # Top-left
-        '2': img[:, :crop_height, crop_width:],        # Top-right
-        '3': img[:, crop_height:, :crop_width],        # Bottom-left
-        '4': img[:, crop_height:, crop_width:],        # Bottom-right
+        "1": img[:, :crop_height, :crop_width],  # Top-left
+        "2": img[:, :crop_height, crop_width:],  # Top-right
+        "3": img[:, crop_height:, :crop_width],  # Bottom-left
+        "4": img[:, crop_height:, crop_width:],  # Bottom-right
     }
     return crops
-
-
-
 
 
 # def _create_heatmap(img, points, heatmap_size=(256, 256)):
@@ -180,10 +205,12 @@ def quad_crop(img, crop_size=(1024, 1024)):
 #     return heatmaps.float()
 
 
-def _create_heatmap( points, img_size, heatmap_size=(256, 256), sigma=1.0, normalize=True):
+def _create_heatmap(
+    points, img_size, heatmap_size=(256, 256), sigma=1.0, normalize=True
+):
     """
     Generate a heatmap for crowd counting tasks.
-    
+
     :param img: Tensor image
     :param points: Array of points (N, 2)
     :param heatmap_size: Size of the heatmap (height, width)
@@ -192,9 +219,10 @@ def _create_heatmap( points, img_size, heatmap_size=(256, 256), sigma=1.0, norma
     :param normalize: Whether to normalize the heatmap
     :return: Heatmap tensor
     """
-    assert isinstance(img_size, tuple) and img_size[0]==img_size[1], "img_size type should be tuple and square shape"
-    scale = img_size[0]/heatmap_size[0] # 2048/256 = 8
-
+    assert (
+        isinstance(img_size, tuple) and img_size[0] == img_size[1]
+    ), "img_size type should be tuple and square shape"
+    scale = img_size[0] / heatmap_size[0]  # 2048/256 = 8
 
     if not isinstance(sigma, torch.Tensor):
         sigma = torch.ones(len(points)) * sigma
@@ -204,110 +232,138 @@ def _create_heatmap( points, img_size, heatmap_size=(256, 256), sigma=1.0, norma
 
     x = torch.arange(0, heatmap_size[0], 1)
     y = torch.arange(0, heatmap_size[1], 1)
-    x, y = torch.meshgrid(x, y, indexing='xy')
+    x, y = torch.meshgrid(x, y, indexing="xy")
     x, y = x.unsqueeze(0), y.unsqueeze(0)
 
     heatmap = torch.zeros(1, 1, heatmap_size[0], heatmap_size[1])
 
     for i in range(len(points)):
         mu_x, mu_y = points[i, 0].view(-1, 1, 1), points[i, 1].view(-1, 1, 1)
-        heatmap_ = torch.exp(-((x - mu_x) ** 2 + (y - mu_y) ** 2) / (2 * sigma[i].view(-1, 1, 1) ** 2))
+        heatmap_ = torch.exp(
+            -((x - mu_x) ** 2 + (y - mu_y) ** 2) / (2 * sigma[i].view(-1, 1, 1) ** 2)
+        )
         heatmap_ = heatmap_.reshape(1, 1, heatmap_size[0], heatmap_size[1])
         heatmap += heatmap_
 
     if normalize:
         heatmap /= heatmap.max()
 
-    heatmap=heatmap.squeeze(1)
+    heatmap = heatmap.squeeze(1)
 
     return heatmap.float()
 
 
-
-
 class VividDataset(Dataset):
-    def __init__(self, data_root, file_list, mode='train', use_random_crop=False) -> None:
+    def __init__(
+        self, data_root, file_list, mode="train", use_random_crop=False
+    ) -> None:
         super(VividDataset, self).__init__()
         self.data_root = data_root
-        self.img_path = os.path.join(data_root, 'images')
-        self.ann_path = os.path.join(data_root, 'anns')
+        self.img_path = os.path.join(data_root, "images")
+        self.ann_path = os.path.join(data_root, "anns")
         self.file_list = file_list
-        self.img_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+        self.img_transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                ),
+            ]
+        )
         self.mode = mode
         self.use_random_crop = use_random_crop
-    
+
     def __len__(self):
         return len(self.file_list)
-    
+
     def __getitem__(self, index):
-        # read img and npy 
+        # read img and npy
         item_name = self.file_list[index]
-        img_file_path, dot_ann_path = os.path.join(self.img_path, item_name+'.png'), os.path.join(self.ann_path, item_name+'.npy')
-        img = Image.open(img_file_path).convert('RGB')
+        img_file_path, dot_ann_path = os.path.join(
+            self.img_path, item_name + ".png"
+        ), os.path.join(self.ann_path, item_name + ".npy")
+        img = Image.open(img_file_path).convert("RGB")
         if self.img_transform:
             img = self.img_transform(img)
-        keypoints = np.load(dot_ann_path) #np.ndarray: (n, 2)
+        keypoints = np.load(dot_ann_path)  # np.ndarray: (n, 2)
 
         # random crop images
         if self.use_random_crop:
-            img, keypoints = _convert(img, keypoints, target_size=(2048, 2048)) # maybe larger img size
-            if self.mode == 'train':
-                img, keypoints =random_crop(img, keypoints, crop_size=(1024, 1024))
-                heatmap = _create_heatmap(keypoints, img_size=(1024, 1024),sigma=1)
+            img, keypoints = _convert(
+                img, keypoints, target_size=(2048, 2048)
+            )  # maybe larger img size
+            if self.mode == "train":
+                img, keypoints = random_crop(img, keypoints, crop_size=(1024, 1024))
+                heatmap = _create_heatmap(keypoints, img_size=(1024, 1024), sigma=1)
                 del keypoints
                 return img, heatmap
-            
-            elif self.mode == 'test':
+
+            elif self.mode == "test":
                 img_dict = quad_crop(img)
                 return img_dict, keypoints
-            
+
             else:
-                raise NotImplementedError('Please use right mode code')
+                raise NotImplementedError("Please use right mode code")
 
         # use original whole image
         else:
-            target_img_size = (1024, 1024) # ViT can only take (1024, 1024) image
-            img, keypoints = _convert(img, keypoints, target_img_size) # resize to target size
-            heatmap = _create_heatmap(keypoints, img_size=target_img_size, sigma=1) # (1, 256, 256) make heatmap based on the img and points 
-            if self.mode == 'train':
+            target_img_size = (1024, 1024)  # ViT can only take (1024, 1024) image
+            img, keypoints = _convert(
+                img, keypoints, target_img_size
+            )  # resize to target size
+            heatmap = _create_heatmap(
+                keypoints, img_size=target_img_size, sigma=1
+            )  # (1, 256, 256) make heatmap based on the img and points
+            if self.mode == "train":
                 del keypoints
                 return img, heatmap
-            
-            elif self.mode == 'test':
-                return img, keypoints
-            
-            else:
-                raise NotImplementedError('Please use right mode code')
 
-        
+            elif self.mode == "test":
+                return img, len(keypoints)
+
+            else:
+                raise NotImplementedError("Please use right mode code")
+
 
 def build_loader(root_dir, batch_size):
-    '''
+    """
     the only function exposed to the outer class to build dataloaders
 
     @param ROOT_DIR root dir of the entire dataset
-    @param BATCH_SIZE 
+    @param BATCH_SIZE
     @return dict: three respective dataloaders
-    '''
+    """
     train_files, val_files, test_files = _split_phases(root_dir)
-    train_dataset, test_dataset, val_dataset = VividDataset(root_dir, train_files), VividDataset(root_dir, test_files), VividDataset(root_dir, val_files)
+    train_dataset, val_dataset, test_dataset = (
+        VividDataset(root_dir, train_files, mode="train"),  # loss
+        VividDataset(root_dir, val_files, mode="train"),  # loss
+        VividDataset(root_dir, test_files, mode="test"),  # metric mse/msn
+    )
 
     # loader
-    train_loader = DataLoader(train_dataset, batch_size, shuffle=True, num_workers=12, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size, shuffle=True, num_workers=12, pin_memory=True)
-    test_loader =  DataLoader(test_dataset, batch_size, shuffle=True, num_workers=12, pin_memory=True)
-    return {'train': train_loader, 'val': val_loader, 'test': test_loader}
+    train_loader = DataLoader(
+        train_dataset, batch_size, shuffle=True, num_workers=4, pin_memory=True
+    )
+    val_loader = DataLoader(
+        val_dataset, batch_size, shuffle=True, num_workers=4, pin_memory=True
+    )
+    test_loader = DataLoader(
+        test_dataset, batch_size, shuffle=True, num_workers=4, pin_memory=True
+    )
+    return {"train": train_loader, "val": val_loader, "test": test_loader}
 
 
-if __name__ == '__main__':
-    root = '/home/xz/Dev/Dream/data/vivid/'
+if __name__ == "__main__":
+    root = "/home/xz/Dev/Dream/data/vivid/"
     train_files, val_files, test_files = _split_phases(root)
-    v = VividDataset('/home/xz/Dev/Dream/data/vivid', file_list=train_files, mode='test', use_random_crop=True)
+    v = VividDataset(
+        "/home/xz/Dev/Dream/data/vivid",
+        file_list=train_files,
+        mode="test",
+        use_random_crop=True,
+    )
 
-    img, map= v[0]
+    img, map = v[0]
     img = restore_image_from_quadrants(img)
     visualize_restored_image(img)
     # visualize_img_and_heatmap(img, map)
