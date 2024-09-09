@@ -364,7 +364,7 @@ if __name__ == "__main__":
     )
 
     img, map = v[0]
-    img = restore_image_from_quadrants(img)
-    visualize_restored_image(img)
+    # img = restore_image_from_quadrants(img)
+    # visualize_restored_image(img)
     # visualize_img_and_heatmap(img, map)
     # visualize_quadrants(img)

@@ -70,7 +70,7 @@ def train(config):
     for epoch in range(EPOCH_NUM):
         point_decoder.train()
         running_loss = 0.0
-        eval(sam, point_decoder, test_loader, device=device)
+        # eval(sam, point_decoder, test_loader, device=device)
 
         for imgs, heatmaps in train_loader:
             imgs = imgs.to(device)  # imgs has to be torch.Size([b, 3, 1024, 1024])
@@ -100,6 +100,7 @@ def train(config):
 
                 features = sam.image_encoder(imgs)
                 pred_heatmaps = point_decoder(features)["pred_heatmaps"]
+                
                 loss = mseloss(pred_heatmaps, gt_heatmaps)
                 val_loss += loss.item()
 
@@ -117,8 +118,8 @@ def train(config):
             )
 
         # Evaluation phase
-        if epoch % 5 == 0:
-            eval(point_decoder, test_loader, device=device)
+        # if epoch % 5 == 0:
+        #     eval(point_decoder, test_loader, device=device)
 
     wandb.finish()
     print("Training complete")

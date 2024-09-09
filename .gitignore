@@ -6,9 +6,6 @@
 # weights/
 # wandb/
 
-# raw/anns/
-# raw/images/
-# raw/json/
 *
 !*.py
 !.gitignore
