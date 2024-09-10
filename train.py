@@ -2,7 +2,8 @@ import torchvision.transforms as transforms
 import torch
 import sys
 
-sys.path.insert(0, "/home/xz/Dev/Dream")
+# sys.path.insert(0, "/home/xz/Dev/Dream")
+from model.dataset import VividDataset, _split_phases
 from model.segment_anything import (
     sam_model_registry,
     SamAutomaticMaskGenerator,
@@ -70,7 +71,6 @@ def train(config):
     for epoch in range(EPOCH_NUM):
         point_decoder.train()
         running_loss = 0.0
-        # eval(sam, point_decoder, test_loader, device=device)
 
         for imgs, heatmaps in train_loader:
             imgs = imgs.to(device)  # imgs has to be torch.Size([b, 3, 1024, 1024])
@@ -90,13 +90,11 @@ def train(config):
 
             running_loss += loss.item()
 
-       
         # Validation phase
         point_decoder.eval()
         val_loss = 0.0
         with torch.no_grad():
             for imgs, heatmaps in val_loader:
-                import pdb; pdb.set_trace()
                 imgs = imgs.to(device)
                 gt_heatmaps = heatmaps.to(device)
 
@@ -105,11 +103,13 @@ def train(config):
 
                 loss = mseloss(pred_heatmaps, gt_heatmaps)
                 val_loss += loss.item()
-                
+
         print(
             f"Epoch [{epoch + 1}/{EPOCH_NUM}], Loss: {running_loss / len(train_loader):.3f}, Validation Loss: {val_loss / len(val_loader)}"
         )
 
+        # Evaluation phase
+        metrics = eval(sam, point_decoder, test_loader)
         if USE_WANDB:
             wandb.log(
                 {
@@ -118,11 +118,7 @@ def train(config):
                 },
                 step=epoch,
             )
-
-        # Evaluation phase
-        # if epoch % 5 == 0:
-        #     eval(point_decoder, test_loader, device=device)
-
+            wandb.log(metrics, step=epoch)
 
     if USE_WANDB:
         wandb.finish()

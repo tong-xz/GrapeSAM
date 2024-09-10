@@ -325,7 +325,9 @@ class VividDataset(Dataset):
                     std=[1 / 0.229, 1 / 0.224, 1 / 0.225],
                 )
                 img = inv_transform(img)
-                return img, keypoints
+                # there should be the number of points
+                point_num = len(keypoints)
+                return img, point_num
 
             else:
                 raise NotImplementedError("Please use right mode code")
