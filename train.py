@@ -90,20 +90,22 @@ def train(config):
 
             running_loss += loss.item()
 
+       
         # Validation phase
         point_decoder.eval()
         val_loss = 0.0
         with torch.no_grad():
             for imgs, heatmaps in val_loader:
+                import pdb; pdb.set_trace()
                 imgs = imgs.to(device)
                 gt_heatmaps = heatmaps.to(device)
 
                 features = sam.image_encoder(imgs)
                 pred_heatmaps = point_decoder(features)["pred_heatmaps"]
-                
+
                 loss = mseloss(pred_heatmaps, gt_heatmaps)
                 val_loss += loss.item()
-
+                
         print(
             f"Epoch [{epoch + 1}/{EPOCH_NUM}], Loss: {running_loss / len(train_loader):.3f}, Validation Loss: {val_loss / len(val_loader)}"
         )
@@ -121,7 +123,9 @@ def train(config):
         # if epoch % 5 == 0:
         #     eval(point_decoder, test_loader, device=device)
 
-    wandb.finish()
+
+    if USE_WANDB:
+        wandb.finish()
     print("Training complete")
 
     # save checkpoint

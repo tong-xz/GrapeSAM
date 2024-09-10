@@ -1,12 +1,14 @@
 import numpy as np
 from matplotlib import pyplot as plt
 import torch
+import torchvision.transforms as transforms
+
 
 # ----------------SAM related--------------------------------
 
-def predict_masks_by_points(predictor, img: np.ndarray, points: torch.Tensor, device="cuda"):
+def predict_masks(predictor, img: np.ndarray, points: torch.Tensor, device="cuda"):
     """_summary_
-
+    predict masks by using points prompts
     Args:
         predictor (_type_): predictor object created through SAM api
         img (np.ndarray): np.ndarray (H, W, 3)
@@ -16,10 +18,18 @@ def predict_masks_by_points(predictor, img: np.ndarray, points: torch.Tensor, de
     Returns:
         _type_: _description_
     """
-
     
     if isinstance(points, np.ndarray):
         points = torch.from_numpy(points).to(device)
+
+    
+    if isinstance(img, torch.Tensor):
+        if img.dim() == 4:
+            img = img.squeeze(0).cpu().numpy() # remove batch dim
+        else:
+            img = img.cpu().numpy()
+
+        assert img.shape[2] == 3, f"img shape should be (H, W, 3) but got {img.shape}"
 
     points= points.unsqueeze(1)
     transformed_points = predictor.transform.apply_coords_torch(points, img.shape[:2])
@@ -36,15 +46,22 @@ def predict_masks_by_points(predictor, img: np.ndarray, points: torch.Tensor, de
 
 
 
-def show_all(image: np.ndarray, masks, save_path=None, dpi=200):
+def vis_pred(image: np.ndarray, masks, save_path=None, dpi=200):
     """_summary_
 
     Args:
         image (np.ndarray): img numpy array
         masks (_type_): masks get from predictor
-        save_path (_type_, optional): _description_. Defaults to None.
+        save_path (_type_, optional): detailed path not directory. Defaults to None.
         dpi (int, optional): _description_. Defaults to 200.
     """
+
+    if isinstance(image, torch.Tensor) and image.device.type == "cuda":
+        image = image.cpu().numpy()
+
+    if isinstance(masks, torch.Tensor) and masks.device.type == "cuda":
+        masks = masks.cpu().numpy()
+
 
     plt.figure(figsize=(20, 10))
     
@@ -67,8 +84,8 @@ def show_all(image: np.ndarray, masks, save_path=None, dpi=200):
     if save_path is not None:
         plt.savefig(save_path, dpi=dpi)
         print(f'Figure saved to {save_path}')
-
-    plt.show()    
+    else:
+        plt.show()    
 
 
 

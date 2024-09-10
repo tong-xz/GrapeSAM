@@ -319,7 +319,13 @@ class VividDataset(Dataset):
                 return img, heatmap
 
             elif self.mode == "test":
-                return img, len(keypoints)
+                #reverse normalize
+                inv_transform = transforms.Normalize(
+                    mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
+                    std=[1 / 0.229, 1 / 0.224, 1 / 0.225],
+                )
+                img = inv_transform(img)
+                return img, keypoints
 
             else:
                 raise NotImplementedError("Please use right mode code")

@@ -97,6 +97,7 @@ class PointDecoder(nn.Module):
         pos_src = image_pe
         b, c, h, w = src.shape
         hs, src = self.transformer(src, pos_src, sparse_embeddings)
+
         src = src.transpose(1, 2).view(b, c, h, w)
         mask_tokens_out = hs[:, 0, :]
         upscaled_embedding = self.output_upscaling(src)
@@ -105,6 +106,7 @@ class PointDecoder(nn.Module):
         pred_heatmaps = (hyper_in @ upscaled_embedding.view(b, c, h * w)).view(
             b, -1, h, w
         )
+        
         if self.training:
             return {"pred_heatmaps": pred_heatmaps}
 

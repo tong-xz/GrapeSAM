@@ -1,11 +1,11 @@
 import argparse
 import os
 import torch
-from model import build_sam_vit_h, PointDecoder
+from model import build_sam_vit_h, PointDecoder, SamPredictor
 import torchvision.transforms as transforms
 import numpy as np
 from PIL import Image
-from model import VividDataset
+from model import VividDataset, predict_masks, vis_pred
 
 
 def calculate_MAE(gt_points, pred_points):
@@ -66,52 +66,68 @@ def restore_image_from_quadrants(quadrants):
 
 def main(args):
     # prepare dataset and everything
-    root_dir, ckp_path = args.root_dir, args.ckp_path
-    test_txt_file = os.path.join(root_dir, "test.txt")
+    ROOT_DIR = args.root_dir
+    CKP_PATH = args.ckp_path
+    SAVE_DIR = args.save_dir
+
+    os.makedirs(SAVE_DIR, exist_ok=True)
+    test_txt_file = os.path.join(ROOT_DIR, "test.txt")
 
     with open(test_txt_file, "r") as f:
         test_list = [line.strip() for line in f]
 
-    dataset = VividDataset(root_dir, test_list, mode="test")
+    dataset = VividDataset(ROOT_DIR, test_list, mode="test")
 
     # init model
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     sam = build_sam_vit_h().to(device).eval()
     point_mask_decoder = PointDecoder(sam).to(device).eval()
-    point_mask_decoder.load_state_dict(torch.load(ckp_path, map_location=device))
-
+    point_mask_decoder.load_state_dict(torch.load(CKP_PATH, map_location=device))
+    predictor = SamPredictor(sam)
     total_mae, total_mse = 0, 0
     count = 0
 
     for idx, data in enumerate(dataset):
-        img_dict, gt_points = data[0], data[1]
+        img, gt_points = data[0], data[1]
+        img = img.unsqueeze(0).to(device)
+        gt_points = torch.from_numpy(gt_points).to(device)
+        print(idx)
+        with torch.no_grad():
 
-        with torch.inference_mode():
             features = sam.image_encoder(img).to(device)
 
             # Set parameters for point mask decoder
             point_mask_decoder.max_points = 512
             point_mask_decoder.nms_kernel_size = 3
-            point_mask_decoder.point_threshold = 0.2
-
+            point_mask_decoder.point_threshold = 0.1
             pred = point_mask_decoder(features)
-            pred_points = pred["pred_points"].squeeze()
+            pred_points = pred["pred_points"].squeeze()     
+            print(pred_points.shape)
 
-            # Calculate MAE and MSE
-            mae = calculate_MAE(gt_points, pred_points)
-            mse = calculate_MSE(gt_points, pred_points)
+            # filter expcetion values
+            #TODO figure out why exists
+            if pred_points.dim() == 2 and pred_points.shape[0] != 0:
+                img = img.squeeze(0).permute(1, 2, 0)
+                masks, scores, logits = predict_masks(predictor, img, pred_points)
+                
+                vis_pred(img, masks, save_path=os.path.join(SAVE_DIR, f'{idx}.png'))
+            
+            
+    #         # Calculate MAE and MSE
+    #         mae = calculate_MAE(gt_points, pred_points)
+    #         mse = calculate_MSE(gt_points, pred_points)
 
-            print(f"Image {idx}: MAE = {mae}, MSE = {mse}")
+    #         print(f"Image {idx}: MAE = {mae}, MSE = {mse}")
 
-            total_mae += mae
-            total_mse += mse
-            count += 1
+    #         total_mae += mae
+    #         total_mse += mse
+    #         count += 1
 
-    # Calculate overall MAE and MSE
-    final_mae = total_mae / count
-    final_mse = total_mse / count
+    # # Calculate overall MAE and MSE
+    # final_mae = total_mae / count
+    # final_mse = total_mse / count
 
-    print(f"Final MAE: {final_mae}, Final MSE: {final_mse}")
+    # print(f"Final MAE: {final_mae}, Final MSE: {final_mse}")
 
 
 if __name__ == "__main__":
