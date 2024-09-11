@@ -113,6 +113,9 @@ class PointDecoder(nn.Module):
         if masks is not None:
             pred_heatmaps *= masks
 
+
+        #TODO use self-adpatble threshold instead of manually set threshold
+        #TODO maybe removre nms post-processing
         with torch.no_grad():
             from .ops.ops import _nms
 
