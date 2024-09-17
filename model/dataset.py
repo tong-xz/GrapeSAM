@@ -7,10 +7,10 @@ from PIL import Image
 import torch.nn.functional as F
 from matplotlib import pyplot as plt
 import torch
-import albumentations as A
+# import albumentations as A
 import cv2
 from torch.utils.data import DataLoader
-from util import visualize_img_and_heatmap, visualize_quadrants
+from .util import visualize_img_and_heatmap, visualize_quadrants
 
 # from .util import restore_image_from_quadrants, visualize_restored_image
 
@@ -24,7 +24,7 @@ def _split_phases(root_dir, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
     assert train_ratio + val_ratio + test_ratio == 1.0, "ratio sum must be 1"
     print(f"---Split dataset: train-{train_ratio}; val-{val_ratio}; test-{test_ratio}")
 
-    img_dir = os.path.join(root_dir, "images")
+    img_dir = os.path.join(root_dir, "imgs")
     all_files = os.listdir(img_dir)
     all_files = [
         os.path.splitext(file)[0]
@@ -230,7 +230,7 @@ class VividDataset(Dataset):
     ) -> None:
         super(VividDataset, self).__init__()
         self.data_root = data_root
-        self.img_path = os.path.join(data_root, "images")
+        self.img_path = os.path.join(data_root, "imgs")
         self.ann_path = os.path.join(data_root, "anns")
         self.file_list = file_list
         self.img_transform = transforms.Compose(
@@ -313,7 +313,12 @@ def build_loader(root_dir, batch_size, use_rcrop):
     @param BATCH_SIZE
     @return dict: three respective dataloaders
     """
-    train_files, val_files, test_files = _split_phases(root_dir)
+
+    # only initiate once
+    if not os.path.exists(os.path.join(root_dir, 'train.txt')):
+        train_files, val_files, test_files = _split_phases(root_dir)
+
+
     train_dataset, val_dataset, test_dataset = (
         VividDataset(root_dir, train_files, mode="train", use_random_crop=use_rcrop),  # loss
         VividDataset(root_dir, val_files, mode="train", use_random_crop=use_rcrop),  # loss
@@ -328,49 +333,9 @@ def build_loader(root_dir, batch_size, use_rcrop):
         val_dataset, batch_size, shuffle=True, num_workers=4, pin_memory=True
     )
     test_loader = DataLoader(
-        test_dataset, batch_size, shuffle=True, num_workers=4, pin_memory=True
+        test_dataset, batch_size, num_workers=4, pin_memory=True
     )
     return {"train": train_loader, "val": val_loader, "test": test_loader}
-
-
-
-# class WgisdDataset(Dataset):
-#     def __init__(self, data_root, file_list, mode="train", use_random_crop=False) -> None:
-#         super(WgisdDataset, self).__init__()
-#         self.data_path = data_root
-#         self.img_path = os.path.join(data_root, "images")
-#         self.ann_path = os.path.join(data_root, "anns")
-#         self.file_list = file_list
-#         self.img_transform = transforms.Compose(
-#             [
-#                 transforms.ToTensor(),
-#                 transforms.Normalize(
-#                     mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-#                 ),
-#             ]
-#         )
-#         self.mode = mode
-#         self.use_random_crop = use_random_crop
-
-
-#     def __len__(self):
-#         return len(self.img_list)
-
-#     def __getitem__(self, idx):
-#         img_path = os.path.join(self.img_path, self.img_list[idx])
-#         img = Image.open(img_path)
-
-#         img = Image.fromarray(transform(image=np.array(img))["image"])  # PIL image
-
-
-#         img = self.img_transform(img)  # (3, 256, 256)
-
-#         ann_path = os.path.join(
-#             self.ann_path, self.img_list[idx].split(".")[0] + "-berries.txt"
-#         )
-#         dot_ann = np.loadtxt(ann_path)  # np: (n, 2)
-#         heatmap = self._create_heatmap(dot_ann)  # [1, 256, 256]
-#         return img, heatmap
 
 
 
@@ -380,9 +345,10 @@ if __name__ == "__main__":
     v = VividDataset(
         root,
         file_list=train_files,
-        mode="train",
-        use_random_crop=True,
+        mode="test",
     )
+    import pdb; pdb.set_trace()
+    print(v[0])
 
     # for i, data in enumerate(v):
     #     img, map = data[0], data[1]
@@ -396,6 +362,6 @@ if __name__ == "__main__":
     # visualize_img_and_heatmap(img, map)
     # # visualize_quadrants(img)
 
-    loader_dict = build_loader(root, 4, True)
-    for imgs, heatmaps in loader_dict['train']:
-        print(imgs.shape, heatmaps.shape)
+    # loader_dict = build_loader(root, 4, True)
+    # for imgs, heatmaps in loader_dict['train']:
+    #     print(imgs.shape, heatmaps.shape)

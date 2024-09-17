@@ -11,9 +11,9 @@ def eval(sam, point_mask_decoder, dataloader, use_crop):
     total_nae = 0.0
     total_sre = 0.0
     point_mask_decoder.eval()
-    point_mask_decoder.max_points = 512
+    point_mask_decoder.max_points = 1024
     point_mask_decoder.nms_kernel_size = 3
-    point_mask_decoder.point_threshold = 0.2
+    point_mask_decoder.point_threshold = 0.5
     if not use_crop:
         with torch.inference_mode(), torch.no_grad():
             for img, gt_points in dataloader:
@@ -22,6 +22,7 @@ def eval(sam, point_mask_decoder, dataloader, use_crop):
                 # TODO tune these parameters to see the best effect
 
                 pred = point_mask_decoder(features)
+                import pdb; pdb.set_trace()
                 pred_points = torch.sum(
                     pred["pred_points_score"] > point_mask_decoder.point_threshold
                 )

@@ -55,8 +55,8 @@ def train(config):
     print("---Decoder Parameters: %.2fM" % (n_parameters / 1e6,))
 
     optimizer = torch.optim.AdamW(
-        list(point_decoder.parameters()), lr=0.0001, weight_decay=0.0
-    )
+        list(point_decoder.parameters()), lr=1e-4, weight_decay=1e-2
+    ) # 0.0001
     mseloss = nn.MSELoss()
 
     if USE_WANDB:
@@ -65,7 +65,7 @@ def train(config):
         run = wandb.init(
             # Set the project where this run will be logged
             project="Vivid-exp",
-            name="random-crop",
+            name="w-nc-nlr",
             tags=["init"],
         )
 
@@ -151,8 +151,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--epoch_num", default=100, action="store", type=int, required=True
     )
-    parser.add_argument("--root_dir", default="./data/vivid", action="store", type=str)
-    parser.add_argument("--save_dir", default="./weights", action="store", type=str)
+    parser.add_argument("--root_dir", default="./data/wgisd", action="store", type=str)
+    parser.add_argument("--save_dir", default="./weights/wgisd", action="store", type=str)
     parser.add_argument("--sam_ckpt", type=str, default=None)
     parser.add_argument(
         "--use_crop",
