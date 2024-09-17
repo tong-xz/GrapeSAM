@@ -1,7 +1,7 @@
 import argparse
 import torch
 
-from model.dataset import VividDataset, _split_phases
+from model.dataset import build_loader
 
 
 def eval(sam, point_mask_decoder, dataloader, use_crop):
@@ -13,15 +13,17 @@ def eval(sam, point_mask_decoder, dataloader, use_crop):
     point_mask_decoder.eval()
     point_mask_decoder.max_points = 1024
     point_mask_decoder.nms_kernel_size = 3
-    point_mask_decoder.point_threshold = 0.5
+    point_mask_decoder.point_threshold = 0.2
     if not use_crop:
         with torch.inference_mode(), torch.no_grad():
             for img, gt_points in dataloader:
                 img, gt_points = img.cuda(), gt_points.cuda().sum()
                 features = sam.image_encoder(img)
                 # TODO tune these parameters to see the best effect
-
+                
+                # not right
                 pred = point_mask_decoder(features)
+
                 import pdb; pdb.set_trace()
                 pred_points = torch.sum(
                     pred["pred_points_score"] > point_mask_decoder.point_threshold
@@ -62,19 +64,18 @@ if __name__ == "__main__":
     parser.add_argument( "--root_dir", type=str, required=True, help="root directory of the dataset folders")
     parser.add_argument("--ckp_path", type=str, required=True, help="checkpoint path")
     parser.add_argument("--sam_ckpt", type=str, default=None)
-    parser.add_argument("--use_crop", action="store_true", help="if use random crop when training")
+    parser.add_argument("--use_rcrop", action="store_true", help="if use random crop when training")
     args = parser.parse_args()
     
-    root_dir, ckp_path, use_crop = args.root_dir, args.ckp_path, args.use_crop
+    root_dir, ckp_path, use_rcrop = args.root_dir, args.ckp_path, args.use_rcrop
 
     # prepare dataset and everything
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     sam = build_sam_vit_h(args.sam_ckpt).to(device).eval()
     point_mask_decoder = PointDecoder(sam).to(device).eval()
     point_mask_decoder.load_state_dict(torch.load(ckp_path, map_location=device))
-    train_files, val_files, test_files = _split_phases(args.root_dir)
-    test_dataset = VividDataset(args.root_dir, test_files, mode="test")
-    test_loader = DataLoader(
-        test_dataset, 4, shuffle=True, num_workers=4, pin_memory=True
-    )
-    eval(sam, point_mask_decoder, test_loader, use_crop)
+
+
+    test_loader = build_loader(root_dir, batch_size=4, use_rcrop=use_rcrop)['test']
+
+    eval(sam, point_mask_decoder, test_loader, use_rcrop)

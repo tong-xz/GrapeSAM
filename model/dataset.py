@@ -56,6 +56,26 @@ def _split_phases(root_dir, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
     return train_files, val_files, test_files
 
 
+def _read_phases(root_dir):
+    """
+    Reads train.txt, val.txt, and test.txt from the root directory and returns three lists.
+    
+    @param root_dir: The root directory where train.txt, val.txt, and test.txt are located.
+    @return: Three lists representing the contents of train.txt, val.txt, and test.txt, respectively.
+    """
+    def read_txt_to_list(file_path):
+        try:
+            with open(file_path, 'r') as f:
+                return [line.strip() for line in f.readlines()]
+        except FileNotFoundError:
+            print(f"Error: The file {file_path} does not exist.")
+        except Exception as e:
+            print(f"An error occurred while reading the file {file_path}: {e}")
+        return []
+
+    split_files = ['train.txt', 'val.txt', 'test.txt']
+    return [read_txt_to_list(os.path.join(root_dir, file)) for file in split_files]
+
 def _convert(img, keypoints, target_size=(2048, 2048)):
     """
     Resize the image tensor while maintaining aspect ratio, pad to target size, and adjust keypoints accordingly.
@@ -316,8 +336,10 @@ def build_loader(root_dir, batch_size, use_rcrop):
 
     # only initiate once
     if not os.path.exists(os.path.join(root_dir, 'train.txt')):
+        print
         train_files, val_files, test_files = _split_phases(root_dir)
-
+    else:
+        train_files, val_files, test_files = _read_phases(root_dir)
 
     train_dataset, val_dataset, test_dataset = (
         VividDataset(root_dir, train_files, mode="train", use_random_crop=use_rcrop),  # loss
@@ -341,14 +363,13 @@ def build_loader(root_dir, batch_size, use_rcrop):
 
 if __name__ == "__main__":
     root = "/home/xz/Dev/Dream/data/wgisd/"
-    train_files, val_files, test_files = _split_phases(root)
-    v = VividDataset(
-        root,
-        file_list=train_files,
-        mode="test",
-    )
-    import pdb; pdb.set_trace()
-    print(v[0])
+    # train_files, val_files, test_files = _split_phases(root)
+    # v = VividDataset(
+    #     root,
+    #     file_list=train_files,
+    #     mode="test",
+    # )
+    # print(v[0])
 
     # for i, data in enumerate(v):
     #     img, map = data[0], data[1]
@@ -362,6 +383,6 @@ if __name__ == "__main__":
     # visualize_img_and_heatmap(img, map)
     # # visualize_quadrants(img)
 
-    # loader_dict = build_loader(root, 4, True)
+    loader_dict = build_loader(root, 4, True)
     # for imgs, heatmaps in loader_dict['train']:
     #     print(imgs.shape, heatmaps.shape)
