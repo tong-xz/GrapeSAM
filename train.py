@@ -36,9 +36,11 @@ def train(config):
     ROOT_DIR = config["root_dir"]
     USE_WANDB = config["wandb"]
     SAVE_DIR = config["save_dir"]
+    USE_RCROP = config["use_crop"]
+
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    loader_dict = build_loader(root_dir=ROOT_DIR, batch_size=BATCH_SIZE)
+    loader_dict = build_loader(root_dir=ROOT_DIR, batch_size=BATCH_SIZE, use_rcrop=USE_RCROP)
     train_loader, val_loader, test_loader = (
         loader_dict["train"],
         loader_dict["val"],
@@ -62,8 +64,8 @@ def train(config):
 
         run = wandb.init(
             # Set the project where this run will be logged
-            project="Vivid",
-            name="pseco",
+            project="Vivid-exp",
+            name="random-crop",
             tags=["init"],
         )
 
@@ -105,11 +107,11 @@ def train(config):
                 val_loss += loss.item()
 
         print(
-            f"Epoch [{epoch + 1}/{EPOCH_NUM}], Loss: {running_loss / len(train_loader):.3f}, Validation Loss: {val_loss / len(val_loader)}"
+            f"Epoch [{epoch + 1}/{EPOCH_NUM}], Loss: {running_loss / len(train_loader)}, Validation Loss: {val_loss / len(val_loader)}"
         )
 
         # Evaluation phase
-        metrics = eval(sam, point_decoder, test_loader)
+        # metrics = eval(sam, point_decoder, test_loader)
         if USE_WANDB:
             wandb.log(
                 {
@@ -118,7 +120,7 @@ def train(config):
                 },
                 step=epoch,
             )
-            wandb.log(metrics, step=epoch)
+            # wandb.log(metrics, step=epoch)
 
     if USE_WANDB:
         wandb.finish()

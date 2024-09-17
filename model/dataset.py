@@ -7,6 +7,8 @@ from PIL import Image
 import torch.nn.functional as F
 from matplotlib import pyplot as plt
 import torch
+import albumentations as A
+import cv2
 from torch.utils.data import DataLoader
 from .util import visualize_img_and_heatmap, visualize_quadrants
 
@@ -170,52 +172,16 @@ def quad_crop(img, crop_size=(1024, 1024)):
     return crops
 
 
-# def _create_heatmap(img, points, heatmap_size=(256, 256)):
-#     '''
-#     pseco style heatmap: https://github.com/Hzzone/PseCo/blob/main/fsc147/2_train_heatmap.ipynb
-#     '''
-#     sigma=0.5
-#     scale = 8 # 2048 / 8 = 256
-#     # 检查 sigma 是否是 torch.Tensor 类型
-#     if not isinstance(sigma, torch.Tensor):
-#         sigma = torch.ones(len(points)) * sigma
-
-#     # 缩放点坐标
-#     points = points / scale
-#     points = torch.tensor(points, dtype=torch.float32)
-
-#     # 生成网格坐标
-#     x = torch.arange(0, heatmap_size[0], 1)
-#     y = torch.arange(0, heatmap_size[1], 1)
-#     x, y = torch.meshgrid(x, y, indexing='xy')
-#     x, y = x.unsqueeze(0), y.unsqueeze(0)
-
-#     heatmaps = torch.zeros(1, 1, heatmap_size[0], heatmap_size[1])
-
-#     # 计算每个点的高斯热力图并合并
-#     for indices in torch.arange(len(points)):
-#         mu_x, mu_y = points[indices, 0].view(-1, 1, 1), points[indices, 1].view(-1, 1, 1)
-#         heatmaps_ = torch.exp(- ((x - mu_x) ** 2 + (y - mu_y) ** 2) / (2 * sigma[indices].view(-1, 1, 1) ** 2))
-#         heatmaps_ = torch.max(heatmaps_, dim=0).values
-#         heatmaps_ = heatmaps_.reshape(1, 1, heatmap_size[0], heatmap_size[1])
-#         heatmaps = torch.maximum(heatmaps, heatmaps_)
-
-#     heatmaps = heatmaps.squeeze(0)
-#     img = transforms.Resize(heatmap_size)(img)
-#     return heatmaps.float()
-
-
 def _create_heatmap(
     points, img_size, heatmap_size=(256, 256), sigma=1.0, normalize=True
 ):
     """
     Generate a heatmap for crowd counting tasks.
-
-    :param img: Tensor image
+    
     :param points: Array of points (N, 2)
+    :param img_size: Size of the original image (height, width)
     :param heatmap_size: Size of the heatmap (height, width)
     :param sigma: Standard deviation for Gaussian kernel
-    :param scale: Scale factor to downsize points # 2048 / 8 = 256
     :param normalize: Whether to normalize the heatmap
     :return: Heatmap tensor
     """
@@ -223,6 +189,13 @@ def _create_heatmap(
         isinstance(img_size, tuple) and img_size[0] == img_size[1]
     ), "img_size type should be tuple and square shape"
     scale = img_size[0] / heatmap_size[0]  # 2048/256 = 8
+    
+    # Create an empty heatmap
+    heatmap = torch.zeros(1, 1, heatmap_size[0], heatmap_size[1])
+    
+    # If there are no points, return the empty heatmap
+    if len(points) == 0:
+        return heatmap.squeeze(1).float()
 
     if not isinstance(sigma, torch.Tensor):
         sigma = torch.ones(len(points)) * sigma
@@ -235,8 +208,6 @@ def _create_heatmap(
     x, y = torch.meshgrid(x, y, indexing="xy")
     x, y = x.unsqueeze(0), y.unsqueeze(0)
 
-    heatmap = torch.zeros(1, 1, heatmap_size[0], heatmap_size[1])
-
     for i in range(len(points)):
         mu_x, mu_y = points[i, 0].view(-1, 1, 1), points[i, 1].view(-1, 1, 1)
         heatmap_ = torch.exp(
@@ -245,7 +216,7 @@ def _create_heatmap(
         heatmap_ = heatmap_.reshape(1, 1, heatmap_size[0], heatmap_size[1])
         heatmap += heatmap_
 
-    if normalize:
+    if normalize and heatmap.max() > 0:
         heatmap /= heatmap.max()
 
     heatmap = heatmap.squeeze(1)
@@ -292,10 +263,11 @@ class VividDataset(Dataset):
             img, keypoints = _convert(
                 img, keypoints, target_size=(2048, 2048)
             )  # maybe larger img size
+            
             if self.mode == "train":
                 img, keypoints = random_crop(img, keypoints, crop_size=(1024, 1024))
                 heatmap = _create_heatmap(keypoints, img_size=(1024, 1024), sigma=1)
-                del keypoints
+                
                 return img, heatmap
 
             elif self.mode == "test":
@@ -333,7 +305,7 @@ class VividDataset(Dataset):
                 raise NotImplementedError("Please use right mode code")
 
 
-def build_loader(root_dir, batch_size):
+def build_loader(root_dir, batch_size, use_rcrop):
     """
     the only function exposed to the outer class to build dataloaders
 
@@ -343,9 +315,9 @@ def build_loader(root_dir, batch_size):
     """
     train_files, val_files, test_files = _split_phases(root_dir)
     train_dataset, val_dataset, test_dataset = (
-        VividDataset(root_dir, train_files, mode="train"),  # loss
-        VividDataset(root_dir, val_files, mode="train"),  # loss
-        VividDataset(root_dir, test_files, mode="test"),  # metric mse/msn
+        VividDataset(root_dir, train_files, mode="train", use_random_crop=use_rcrop),  # loss
+        VividDataset(root_dir, val_files, mode="train", use_random_crop=use_rcrop),  # loss
+        VividDataset(root_dir, test_files, mode="test", use_random_crop=use_rcrop),  # metric mse/msn
     )
 
     # loader
@@ -361,18 +333,141 @@ def build_loader(root_dir, batch_size):
     return {"train": train_loader, "val": val_loader, "test": test_loader}
 
 
+
+class WgisdDataset(Dataset):
+    def __init__(self, data_path, img_transform=None) -> None:
+        super(WgisdDataset, self).__init__()
+        self.data_path = data_path
+        self.img_transform = img_transform
+        self.img_path = os.path.join(data_path, "images")
+        self.ann_path = os.path.join(data_path, "annotations")
+        self.img_list = os.listdir(self.img_path)
+        self.transform = A.Compose(
+            [
+                A.LongestMaxSize(1024),
+                A.PadIfNeeded(
+                    1024,
+                    1024,
+                    border_mode=0,
+                    value=(0, 0, 0),
+                    position=A.PadIfNeeded.PositionType.TOP_LEFT,
+                ),
+            ]
+        )
+
+    def __len__(self):
+        return len(self.img_list)
+
+    # TODO changeable sigma
+    # def _create_heatmap(self, points, heatmap_size=(256, 256)):
+    #     sigma = 1
+    #     scale = 8  # 2048 / 8 = 256
+    #     # 检查 sigma 是否是 torch.Tensor 类型
+    #     if not isinstance(sigma, torch.Tensor):
+    #         sigma = torch.ones(len(points)) * sigma
+
+    #     # 缩放点坐标
+    #     points = points / scale
+    #     points = torch.tensor(points, dtype=torch.float32)
+
+    #     # 生成网格坐标
+    #     x = torch.arange(0, heatmap_size[0], 1)
+    #     y = torch.arange(0, heatmap_size[1], 1)
+    #     x, y = torch.meshgrid(x, y, indexing="xy")
+    #     x, y = x.unsqueeze(0), y.unsqueeze(0)
+
+    #     heatmaps = torch.zeros(1, 1, heatmap_size[0], heatmap_size[1])
+
+    #     # 计算每个点的高斯热力图并合并
+    #     for indices in torch.arange(len(points)):
+    #         mu_x, mu_y = points[indices, 0].view(-1, 1, 1), points[indices, 1].view(
+    #             -1, 1, 1
+    #         )
+    #         heatmaps_ = torch.exp(
+    #             -((x - mu_x) ** 2 + (y - mu_y) ** 2)
+    #             / (2 * sigma[indices].view(-1, 1, 1) ** 2)
+    #         )
+    #         heatmaps_ = torch.max(heatmaps_, dim=0).values
+    #         heatmaps_ = heatmaps_.reshape(1, 1, heatmap_size[0], heatmap_size[1])
+    #         heatmaps = torch.maximum(heatmaps, heatmaps_)
+    #     # 删除不必要的维度
+    #     heatmaps = heatmaps.squeeze(0)
+    #     return heatmaps.float()
+
+    def __getitem__(self, idx):
+        img_path = os.path.join(self.img_path, self.img_list[idx])
+        img = Image.open(img_path)
+
+        img = Image.fromarray(transform(image=np.array(img))["image"])  # PIL image
+        img = self.img_transform(img)  # (3, 256, 256)
+
+        ann_path = os.path.join(
+            self.ann_path, self.img_list[idx].split(".")[0] + "-berries.txt"
+        )
+        dot_ann = np.loadtxt(ann_path)  # np: (n, 2)
+        heatmap = self._create_heatmap(dot_ann)  # [1, 256, 256]
+        return img, heatmap
+
+    def visualize(self, idx, mode="ann"):
+        """_summary_
+        visualize data: idx; ann - show annotations; heatmap - show heatmap
+        Args:
+            idx (_type_): _description_
+            mode (str, optional): _description_. Defaults to 'ann'.
+        """
+        img_path = os.path.join(self.img_path, self.img_list[idx])
+        image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
+        plt.figure(figsize=(10, 10))
+        if mode == "ann":
+            ann_path = os.path.join(
+                self.ann_path, self.img_list[idx].split(".")[0] + "-berries.txt"
+            )
+            dot_ann = np.loadtxt(ann_path)
+            plt.imshow(image)
+            plt.scatter(dot_ann[:, 0], dot_ann[:, 1], color="r", s=1)
+        elif mode == "heatmap":
+            img, heatmap = self.__getitem__(idx)
+
+            assert img.shape == torch.Size([3, 256, 256]), "Resize to 256x256"
+
+            heatmap = transforms.Resize((256, 256))(
+                heatmap
+            )  # Resize the heatmap to 256x256
+            img = img.permute(1, 2, 0).numpy()  # Convert from (C, H, W) to (H, W, C)
+            img = img * np.array([0.229, 0.224, 0.225]) + np.array(
+                [0.485, 0.456, 0.406]
+            )  # Unnormalize
+            img = np.clip(img, 0, 1)  # Clip to [0, 1]
+            plt.imshow(img)
+            plt.imshow(heatmap.squeeze().cpu(), alpha=0.4, cmap="hot")
+
+        plt.axis("off")
+        plt.show()
+
+
+
 if __name__ == "__main__":
     root = "/home/xz/Dev/Dream/data/vivid/"
     train_files, val_files, test_files = _split_phases(root)
     v = VividDataset(
         "/home/xz/Dev/Dream/data/vivid",
         file_list=train_files,
-        mode="test",
+        mode="train",
         use_random_crop=True,
     )
 
-    img, map = v[0]
-    # img = restore_image_from_quadrants(img)
-    # visualize_restored_image(img)
+    # for i, data in enumerate(v):
+    #     img, map = data[0], data[1]
+        
+    #     visualize_img_and_heatmap(img, map)
+        
+    #     print(i)
+    
+    # # img = restore_image_from_quadrants(img)
+    # # visualize_restored_image(img)
     # visualize_img_and_heatmap(img, map)
-    # visualize_quadrants(img)
+    # # visualize_quadrants(img)
+
+    loader_dict = build_loader(root, 4, True)
+    for imgs, heatmaps in loader_dict['train']:
+        print(imgs.shape, heatmaps.shape)
