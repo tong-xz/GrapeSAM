@@ -11,26 +11,20 @@ def eval(sam, point_mask_decoder, dataloader, use_crop):
     total_nae = 0.0
     total_sre = 0.0
     point_mask_decoder.eval()
-    point_mask_decoder.max_points = 1024
+    point_mask_decoder.max_points = 2048
     point_mask_decoder.nms_kernel_size = 3
-    point_mask_decoder.point_threshold = 0.2
+    point_mask_decoder.point_threshold = 0.1
     if not use_crop:
         with torch.inference_mode(), torch.no_grad():
             for img, gt_points in dataloader:
                 img, gt_points = img.cuda(), gt_points.cuda().sum()
                 features = sam.image_encoder(img)
-                # TODO tune these parameters to see the best effect
                 
-                # not right
                 pred = point_mask_decoder(features)
-
-                import pdb; pdb.set_trace()
-                pred_points = torch.sum(
-                    pred["pred_points_score"] > point_mask_decoder.point_threshold
-                )
+                pred_points_num = pred["pred_points"].shape[1]
 
                 # compare difference with gt and prediciton
-                err = abs(gt_points - pred_points)
+                err = abs(gt_points - pred_points_num)
                 total_mae += err
                 total_mse += err**2
                 total_nae += err / gt_points
@@ -76,6 +70,6 @@ if __name__ == "__main__":
     point_mask_decoder.load_state_dict(torch.load(ckp_path, map_location=device))
 
 
-    test_loader = build_loader(root_dir, batch_size=4, use_rcrop=use_rcrop)['test']
+    test_loader = build_loader(root_dir, batch_size=1, use_rcrop=use_rcrop)['test']
 
     eval(sam, point_mask_decoder, test_loader, use_rcrop)

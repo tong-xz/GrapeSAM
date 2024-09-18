@@ -325,7 +325,7 @@ class VividDataset(Dataset):
                 raise NotImplementedError("Please use right mode code")
 
 
-def build_loader(root_dir, batch_size, use_rcrop):
+def build_loader(root_dir, batch_size, use_rcrop, phase='train'):
     """
     the only function exposed to the outer class to build dataloaders
 
@@ -340,6 +340,7 @@ def build_loader(root_dir, batch_size, use_rcrop):
         train_files, val_files, test_files = _split_phases(root_dir)
     else:
         train_files, val_files, test_files = _read_phases(root_dir)
+
 
     train_dataset, val_dataset, test_dataset = (
         VividDataset(root_dir, train_files, mode="train", use_random_crop=use_rcrop),  # loss
