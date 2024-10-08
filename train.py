@@ -65,7 +65,7 @@ def train(config):
         run = wandb.init(
             # Set the project where this run will be logged
             project="Vivid-exp",
-            name="w-nc-nlr",
+            name="w-nc-e100",
             tags=["init"],
         )
 

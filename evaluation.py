@@ -4,6 +4,7 @@ import torch
 from model.dataset import build_loader
 
 
+#TODO make sure everything is good and only need MAE and RMSE
 def eval(sam, point_mask_decoder, dataloader, use_crop):
     # init model
     total_mae = 0.0
@@ -13,7 +14,7 @@ def eval(sam, point_mask_decoder, dataloader, use_crop):
     point_mask_decoder.eval()
     point_mask_decoder.max_points = 2048
     point_mask_decoder.nms_kernel_size = 3
-    point_mask_decoder.point_threshold = 0.1
+    point_mask_decoder.point_threshold = 0.045
     if not use_crop:
         with torch.inference_mode(), torch.no_grad():
             for img, gt_points in dataloader:

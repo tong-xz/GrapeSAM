@@ -36,6 +36,7 @@ def predict_masks(predictor, img: np.ndarray, points: torch.Tensor, device="cuda
     labels = torch.ones(points.shape[0], dtype= torch.long).unsqueeze(1).to(device)
 
     predictor.set_image(img)
+
     masks, scores, logits = predictor.predict_torch(
         point_coords=transformed_points,
         point_labels=labels,

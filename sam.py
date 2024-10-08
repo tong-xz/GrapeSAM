@@ -7,9 +7,9 @@ import numpy as np
 
 
 # load data
-image = cv2.imread('/home/xz/Dev/Dream/data/redo-data/test/IMG_7362.jpeg')
+image = cv2.imread('/home/xz/Dev/Dream/data/vivid/imgs/52.png')
 image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-input_points = np.load('/home/xz/Dev/Dream/data/redo-data/test/IMG_7362.npy')
+input_points = np.load('/home/xz/Dev/Dream/data/vivid/anns/52.npy')
 
 # init model
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')

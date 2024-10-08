@@ -192,6 +192,7 @@ def quad_crop(img, crop_size=(1024, 1024)):
     return crops
 
 
+# TODO  Sigma value is proper?
 def _create_heatmap(
     points, img_size, heatmap_size=(256, 256), sigma=1.0, normalize=True
 ):
@@ -253,14 +254,40 @@ class VividDataset(Dataset):
         self.img_path = os.path.join(data_root, "imgs")
         self.ann_path = os.path.join(data_root, "anns")
         self.file_list = file_list
-        self.img_transform = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-                ),
-            ]
-        )
+        self.img_transform  = transforms.Compose([
+            # 1. 颜色抖动 (Color Jitter)
+            transforms.ColorJitter(
+                brightness=0.2,    # 亮度调整范围 [0.8, 1.2]
+                contrast=0.2,      # 对比度调整范围 [0.8, 1.2]
+                saturation=0.2,    # 饱和度调整范围 [0.8, 1.2]
+                hue=0.1            # 色调调整范围 [-0.1, 0.1]
+            ),
+            
+            # 4. 随机调整亮度/对比度/饱和度 (Random Adjustments)
+            transforms.RandomApply([
+                transforms.ColorJitter(
+                    brightness=0.4,
+                    contrast=0.4,
+                    saturation=0.4,
+                    hue=0.1
+                )
+            ], p=0.8),
+            
+            # 6. 高斯模糊 (Gaussian Blur)
+            transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 5)),
+            
+            # 7. 随机灰度化 (Random Grayscale)
+            transforms.RandomGrayscale(p=0.2),
+            
+            # 转换为张量
+            transforms.ToTensor(),
+            
+            # 归一化
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406], 
+                std=[0.229, 0.224, 0.225]
+            ),
+        ])
         self.mode = mode
         self.use_random_crop = use_random_crop
 
