@@ -36,11 +36,10 @@ def train(config):
     ROOT_DIR = config["root_dir"]
     USE_WANDB = config["wandb"]
     SAVE_DIR = config["save_dir"]
-    USE_RCROP = config["use_crop"]
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    loader_dict = build_loader(root_dir=ROOT_DIR, batch_size=BATCH_SIZE, use_rcrop=USE_RCROP)
+    loader_dict = build_loader(root_dir=ROOT_DIR, batch_size=BATCH_SIZE)
     train_loader, val_loader, test_loader = (
         loader_dict["train"],
         loader_dict["val"],
@@ -55,7 +54,7 @@ def train(config):
     print("---Decoder Parameters: %.2fM" % (n_parameters / 1e6,))
 
     optimizer = torch.optim.AdamW(
-        list(point_decoder.parameters()), lr=1e-4, weight_decay=1e-2
+        list(point_decoder.parameters()), lr=1e-4, weight_decay=1e-5, betas=(0.9, 0.99)
     ) # 0.0001
     mseloss = nn.MSELoss()
 
@@ -65,7 +64,7 @@ def train(config):
         run = wandb.init(
             # Set the project where this run will be logged
             project="Vivid-exp",
-            name="w-nc-e100",
+            name="dynamic heatmap",
             tags=["init"],
         )
 
@@ -105,6 +104,11 @@ def train(config):
 
                 loss = mseloss(pred_heatmaps, gt_heatmaps)
                 val_loss += loss.item()
+        
+
+        # if epoch % 10 ==0:
+        #     loss_dict = eval(sam, point_decoder, test_loader)    
+        #     MAE_loss, RMSE_loss = loss_dict['mae'], loss_dict['rmse']
 
         print(
             f"Epoch [{epoch + 1}/{EPOCH_NUM}], Loss: {running_loss / len(train_loader)}, Validation Loss: {val_loss / len(val_loader)}"
@@ -117,10 +121,12 @@ def train(config):
                 {
                     "Train": running_loss / len(train_loader),
                     "Val": val_loss / len(val_loader),
+                    # "MAE": MAE_loss,
+                    # "RMSE": RMSE_loss
                 },
                 step=epoch,
             )
-            # wandb.log(metrics, step=epoch)
+
 
     if USE_WANDB:
         wandb.finish()
@@ -144,6 +150,7 @@ def main(config):
 
 
 if __name__ == "__main__":
+    # python train.py --batch_size 4 --epoch_num 500 --sam_ckpt ./weights/sam_vit_h_4b8939.pth --wandb
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--batch_size", default=4, action="store", type=int, required=True

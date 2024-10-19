@@ -245,9 +245,71 @@ def _create_heatmap(
     return heatmap.float()
 
 
+def _create_heatmap_dsigma(
+    points, img_size, heatmap_size=(256, 256), normalize=True
+):
+    """
+    Generate a heatmap for crowd counting tasks with dynamic sigma based on nearest neighbor distances.
+    
+    :param points: Array of points (N, 2)
+    :param img_size: Size of the original image (height, width)
+    :param heatmap_size: Size of the heatmap (height, width)
+    :param normalize: Whether to normalize the heatmap
+    :return: Heatmap tensor
+    """
+    assert (
+        isinstance(img_size, tuple) and img_size[0] == img_size[1]
+    ), "img_size type should be tuple and square shape"
+    
+    scale = img_size[0] / heatmap_size[0]  # 例如 2048/256 = 8，用于缩放点坐标
+    
+    # 创建一个空的 heatmap
+    heatmap = torch.zeros(1, 1, heatmap_size[0], heatmap_size[1])
+    
+    # 如果没有任何点，返回空的 heatmap
+    if len(points) == 0:
+        return heatmap.squeeze(1).float()
+
+    # 缩放点坐标
+    points = points / scale
+    points = torch.tensor(points, dtype=torch.float32)
+
+    # 使用 torch 生成网格
+    x = torch.arange(0, heatmap_size[0], 1)
+    y = torch.arange(0, heatmap_size[1], 1)
+    x, y = torch.meshgrid(x, y, indexing="xy")
+    x, y = x.unsqueeze(0), y.unsqueeze(0)
+    
+    # 计算动态 sigma，基于最近邻距离
+    distances = torch.cdist(points, points, p=2)  # 欧几里得距离矩阵，形状 (N, N)
+    distances.fill_diagonal_(float('inf'))  # 排除点自身
+    nearest_distances, _ = torch.min(distances, dim=1)  # 每个点的最近邻距离
+    sigma = nearest_distances / 3.0  # 将最近邻距离作为 sigma 值
+    
+    # 对每个点生成高斯分布并叠加到 heatmap
+    for i in range(len(points)):
+        mu_x, mu_y = points[i, 0].view(-1, 1, 1), points[i, 1].view(-1, 1, 1)
+        heatmap_ = torch.exp(
+            -((x - mu_x) ** 2 + (y - mu_y) ** 2) / (2 * sigma[i].view(-1, 1, 1) ** 2)
+        )
+        heatmap_ = heatmap_.reshape(1, 1, heatmap_size[0], heatmap_size[1])
+        heatmap += heatmap_
+
+    # 如果要求 normalize 且 heatmap 的最大值大于 0，进行归一化处理
+    if normalize and heatmap.max() > 0:
+        heatmap /= heatmap.max()
+
+    # 移除多余的维度并返回 heatmap
+    heatmap = heatmap.squeeze(1)
+
+    return heatmap.float()
+
+
+
+
 class VividDataset(Dataset):
     def __init__(
-        self, data_root, file_list, mode="train", use_random_crop=False
+        self, data_root, file_list, mode="train"
     ) -> None:
         super(VividDataset, self).__init__()
         self.data_root = data_root
@@ -255,41 +317,14 @@ class VividDataset(Dataset):
         self.ann_path = os.path.join(data_root, "anns")
         self.file_list = file_list
         self.img_transform  = transforms.Compose([
-            # 1. 颜色抖动 (Color Jitter)
-            transforms.ColorJitter(
-                brightness=0.2,    # 亮度调整范围 [0.8, 1.2]
-                contrast=0.2,      # 对比度调整范围 [0.8, 1.2]
-                saturation=0.2,    # 饱和度调整范围 [0.8, 1.2]
-                hue=0.1            # 色调调整范围 [-0.1, 0.1]
-            ),
-            
-            # 4. 随机调整亮度/对比度/饱和度 (Random Adjustments)
-            transforms.RandomApply([
-                transforms.ColorJitter(
-                    brightness=0.4,
-                    contrast=0.4,
-                    saturation=0.4,
-                    hue=0.1
-                )
-            ], p=0.8),
-            
-            # 6. 高斯模糊 (Gaussian Blur)
-            transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 5)),
-            
-            # 7. 随机灰度化 (Random Grayscale)
-            transforms.RandomGrayscale(p=0.2),
-            
-            # 转换为张量
             transforms.ToTensor(),
-            
-            # 归一化
+
             transforms.Normalize(
                 mean=[0.485, 0.456, 0.406], 
                 std=[0.229, 0.224, 0.225]
             ),
         ])
         self.mode = mode
-        self.use_random_crop = use_random_crop
 
     def __len__(self):
         return len(self.file_list)
@@ -305,54 +340,36 @@ class VividDataset(Dataset):
             img = self.img_transform(img)
         keypoints = np.load(dot_ann_path)  # np.ndarray: (n, 2)
 
-        # random crop images
-        if self.use_random_crop:
-            img, keypoints = _convert(
-                img, keypoints, target_size=(2048, 2048)
-            )  # maybe larger img size
-            
-            if self.mode == "train":
-                img, keypoints = random_crop(img, keypoints, crop_size=(1024, 1024))
-                heatmap = _create_heatmap(keypoints, img_size=(1024, 1024), sigma=1)
-                
-                return img, heatmap
+        target_img_size = (1024, 1024)  # ViT can only take (1024, 1024) image
+        img, keypoints = _convert(
+            img, keypoints, target_img_size
+        )  # resize to target size
+        heatmap = _create_heatmap(keypoints, img_size=target_img_size, sigma=1)
+        # heatmap = _create_heatmap_dsigma(
+        #     keypoints, img_size=target_img_size
+        # )  # (1, 256, 256) make heatmap based on the img and points
 
-            elif self.mode == "test":
-                img_dict = quad_crop(img)
-                return img_dict, keypoints
+        if self.mode == "train":
+            del keypoints
+            return img, heatmap
 
-            else:
-                raise NotImplementedError("Please use right mode code")
+        elif self.mode == "test":
+            #reverse normalize
+            inv_transform = transforms.Normalize(
+                mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
+                std=[1 / 0.229, 1 / 0.224, 1 / 0.225],
+            )
+            img = inv_transform(img)
 
-        # use original whole image
+            # there should be the number of points
+            point_num = len(keypoints)
+            return img, point_num
+
         else:
-            target_img_size = (1024, 1024)  # ViT can only take (1024, 1024) image
-            img, keypoints = _convert(
-                img, keypoints, target_img_size
-            )  # resize to target size
-            heatmap = _create_heatmap(
-                keypoints, img_size=target_img_size, sigma=1
-            )  # (1, 256, 256) make heatmap based on the img and points
-            if self.mode == "train":
-                del keypoints
-                return img, heatmap
-
-            elif self.mode == "test":
-                #reverse normalize
-                inv_transform = transforms.Normalize(
-                    mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
-                    std=[1 / 0.229, 1 / 0.224, 1 / 0.225],
-                )
-                img = inv_transform(img)
-                # there should be the number of points
-                point_num = len(keypoints)
-                return img, point_num
-
-            else:
-                raise NotImplementedError("Please use right mode code")
+            raise NotImplementedError("Please use right mode code")
 
 
-def build_loader(root_dir, batch_size, use_rcrop, phase='train'):
+def build_loader(root_dir, batch_size, phase='train'):
     """
     the only function exposed to the outer class to build dataloaders
 
@@ -370,17 +387,17 @@ def build_loader(root_dir, batch_size, use_rcrop, phase='train'):
 
 
     train_dataset, val_dataset, test_dataset = (
-        VividDataset(root_dir, train_files, mode="train", use_random_crop=use_rcrop),  # loss
-        VividDataset(root_dir, val_files, mode="train", use_random_crop=use_rcrop),  # loss
-        VividDataset(root_dir, test_files, mode="test", use_random_crop=use_rcrop),  # metric mse/msn
+        VividDataset(root_dir, train_files, mode="train"),  # loss
+        VividDataset(root_dir, val_files, mode="train"),  # loss
+        VividDataset(root_dir, test_files, mode="test"),  # metric mse/msn
     )
 
     # loader
     train_loader = DataLoader(
-        train_dataset, batch_size, shuffle=True, num_workers=4, pin_memory=True
+        train_dataset, batch_size, shuffle=True
     )
     val_loader = DataLoader(
-        val_dataset, batch_size, shuffle=True, num_workers=4, pin_memory=True
+        val_dataset, batch_size, shuffle=True
     )
     test_loader = DataLoader(
         test_dataset, batch_size, num_workers=4, pin_memory=True
