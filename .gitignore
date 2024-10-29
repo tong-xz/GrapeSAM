@@ -5,6 +5,7 @@
 # figs/
 # weights/
 # wandb/
+pretrain/
 
 *
 *.pyc
@@ -13,5 +14,5 @@
 !*.ipynb
 !*.md
 !sam.yaml
-
+!pretrain/download_hf.sh
 !*/
