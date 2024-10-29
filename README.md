@@ -9,6 +9,13 @@ https://blog.csdn.net/qq_61676281/article/details/131845706
 
 ![alt text](assets/image.png)
 
+# Config
+
+How to download huggingface model weights?
+```bash
+bash pretrain/download_hf.sh facebook/sam-vit-base sam-vit-base
+```
+
 ## Train
 
 
