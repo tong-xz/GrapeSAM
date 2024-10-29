@@ -5,7 +5,7 @@ import cv2
 from matplotlib import pyplot as plt
 import numpy as np
 
-from model.sam import GSAMVisionEncoder
+from model.sam import GSAMVisionEncoder, GSAMPromptEncoder, GSAMMaskDecoder, GSAMPositionalEmbedding
 import numpy as np
 import matplotlib.pyplot as plt
 import gc
@@ -46,10 +46,12 @@ input_labels = torch.ones(input_points.shape[0], dtype= torch.long).unsqueeze(0)
 
 hf_name = "pretrain/sam-vit-base/"
 init_cfg = {'checkpoint': '/home/xz/Dev/Dream/pretrain/sam-vit-base/pytorch_model.bin'}
-extra_config = {'output_hidden_states': True}
+extra_cfg = {'output_hidden_states': True}
 
-vision_encoder = GSAMVisionEncoder(hf_pretrain_name=hf_name, init_cfg=init_cfg, extra_config=extra_config, device=device)
-
+vision_encoder = GSAMVisionEncoder(hf_pretrain_name=hf_name, init_cfg=init_cfg, extra_cfg=extra_cfg, device=device)
+prompt_encoder = GSAMPromptEncoder(hf_pretrain_name=hf_name, init_cfg=init_cfg, extra_cfg=None, device=device)
+mask_decoder = GSAMMaskDecoder(hf_pretrain_name=hf_name, init_cfg=init_cfg, extra_cfg=None, device=device)
+pe = GSAMPositionalEmbedding(hf_pretrain_name=hf_name, init_cfg=init_cfg, extra_cfg=None, device=device)
 
 # pos_embed = vision_encoder.img_position_embedding
 img_embed = vision_encoder(image_tensor)

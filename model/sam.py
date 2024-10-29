@@ -31,13 +31,21 @@ def _load_weights(model, name, ckpt_path, device):
             print(f"Unexpected keys: {unexpected_keys}")
 
 
+
 class GSAMVisionEncoder(nn.Module):
-    def __init__(self, hf_pretrain_name, init_cfg, extra_config, device):
+    '''
+        hf_pretrain_name: 'work_dirs/sam_cache/sam_vit_base'
+        extra_cfg: {'output_hidden_states': True}
+        peft_config: none
+        init_cfg: {'type': 'Pretrained', 'checkpoint': 'work_dirs/sam_cache/sam_vit_base/pytorch_model.bin'}
+    
+    '''
+    def __init__(self, hf_pretrain_name, init_cfg, extra_cfg, device):
         super().__init__()
+        # load config
         sam_config = SamConfig.from_pretrained(hf_pretrain_name).vision_config
-        
-        if extra_config is not None:
-            sam_config.update(extra_config)
+        if extra_cfg is not None:
+            sam_config.update(extra_cfg)
 
         self.vision_encoder = SamVisionEncoder(sam_config).to(device)
         if init_cfg is not None:
@@ -47,27 +55,54 @@ class GSAMVisionEncoder(nn.Module):
         return self.vision_encoder(*args, **kwargs)
 
 
-# class GSAMPromptEncoder(GSAMBase):
-#     def __init__(self, hf_pretrain_name, device):
-#         super().__init__(hf_pretrain_name, device)
-#         self.g_prompt_encoder = self.prompter_encoder
-#         self.g_prompt_encoder.shared_patch_embedding = None 
-
-#     def forward(self, *args, **kwargs):
-#         return self.g_prompt_encoder(*args, **kwargs)
-
-
-# class GSAMMaskDecoder(GSAMBase):
-#     def __init__(self, hf_pretrain_name, device="cuda"):
-#         super().__init__(hf_pretrain_name, device="cuda")
-#         self.g_mask_decoder = self.mask_decoder
-
-#     def forward(self, *args, **kwargs):
-#         return self.g_mask_decoder(*args, **kwargs)
-
-
-
-
-
+class GSAMPromptEncoder(nn.Module):
+    def __init__(self, hf_pretrain_name, init_cfg, extra_cfg, device):
+        super().__init__()
+        # load config
+        sam_config = SamConfig.from_pretrained(hf_pretrain_name).prompt_encoder_config
+        if extra_cfg is not None:
+            sam_config.update(extra_cfg)
         
+        self.prompt_encoder = SamPromptEncoder(sam_config, shared_patch_embedding=None)
+        if init_cfg is not None:
+            _load_weights(self.prompt_encoder, 'prompt_encoder.', init_cfg['checkpoint'], device)
+
+    def forward(self, *args, **kwargs):
+        return self.prompt_encoder(*args, **kwargs)
+
+
+class GSAMMaskDecoder(nn.Module):
+    def __init__(self, hf_pretrain_name, init_cfg, extra_cfg, device):
+        super().__init__()
+        sam_config = SamConfig.from_pretrained(hf_pretrain_name).mask_decoder_config
+        
+        if extra_cfg is not None:
+            sam_config.update(extra_cfg)
+        
+        self.mask_decoder = SamMaskDecoder(sam_config)
+        
+        if init_cfg is not None:
+            _load_weights(self.mask_decoder, 'mask_decoder.', init_cfg['checkpoint'], device)
+
+    def forward(self, *args, **kwargs):
+        return self.mask_decoder(*args, **kwargs)
+
+
+
+class GSAMPositionalEmbedding(nn.Module):
+    def __init__(self, hf_pretrain_name, init_cfg, extra_cfg, device):
+        super().__init__()
+
+        sam_config = SamConfig.from_pretrained(hf_pretrain_name).vision_config
+        if extra_cfg is not None:
+            sam_config.update(extra_cfg)
+
+        self.shared_image_embedding = SamPositionalEmbedding(sam_config)
+
+        if init_cfg is not None:
+            _load_weights(self.shared_image_embedding, 'shared_image_embedding.', init_cfg['checkpoint'], device)
+
+    def forward(self, *args, **kwargs):
+        return self.shared_image_embedding(*args, **kwargs)
+
         
