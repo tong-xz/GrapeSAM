@@ -36,7 +36,8 @@ def show_masks_on_image(raw_image, masks):
 image = cv2.imread('/home/xz/Dev/Dream/data/vivid/imgs/5.png')
 image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 image = cv2.resize(image, (1024, 1024))
-input_points = np.load('/home/xz/Dev/Dream/data/vivid/anns/5.npy')
+# input_points = np.load('/home/xz/Dev/Dream/data/vivid/anns/5.npy')
+input_points = [[[1353, 2730],[1409, 2822]]]
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 image_tensor = torch.from_numpy(image).unsqueeze(0).permute(0, 3, 1, 2).float().to(device)   # numpy -> tensor
@@ -53,51 +54,12 @@ prompt_encoder = GSAMPromptEncoder(hf_pretrain_name=hf_name, init_cfg=init_cfg, 
 mask_decoder = GSAMMaskDecoder(hf_pretrain_name=hf_name, init_cfg=init_cfg, extra_cfg=None, device=device)
 pe = GSAMPositionalEmbedding(hf_pretrain_name=hf_name, init_cfg=init_cfg, extra_cfg=None, device=device)
 
-# pos_embed = vision_encoder.img_position_embedding
-img_embed = vision_encoder(image_tensor)
-# import pdb; pdb.set_trace()
+
+vision_output = vision_encoder(image_tensor)
+import pdb; pdb.set_trace()
 
 # prompt_embed = prompt_encoder(input_points = point_tensor, input_labels = input_labels, input_boxes = None, input_masks=None)
-_HF_PRETRAIN_NAME = "pretrain/sam-vit-base/"
 
-import matplotlib.pyplot as plt
-import torch
-
-def visualize_feature_maps(feature_tensor, title="Feature Maps", cmap="viridis"):
-    """
-    Visualize feature maps from a 4D tensor with shape [1, C, H, W].
-
-    Args:
-        feature_tensor (torch.Tensor): The feature map tensor with shape [1, C, H, W].
-        title (str): Title for the entire plot.
-        cmap (str): Colormap to use for visualization.
-    """
-    # 检查输入是否符合要求
-    if feature_tensor.dim() != 4 or feature_tensor.shape[0] != 1:
-        raise ValueError("Expected feature_tensor with shape [1, C, H, W]")
-    
-    # 去掉批次维度，得到形状为 [C, H, W]
-    features = feature_tensor.squeeze(0)
-    num_channels = features.shape[0]
-    
-    # 计算网格大小，近似正方形布局
-    grid_size = int(num_channels ** 0.5)
-    fig, axes = plt.subplots(grid_size, grid_size, figsize=(12, 12))
-
-    for i, ax in enumerate(axes.flat):
-        if i < num_channels:
-            # 从 tensor 中取出第 i 个通道，并将其转为 numpy
-            feature_map = features[i].cpu().detach().numpy()
-            ax.imshow(feature_map, cmap=cmap)
-            ax.axis("off")
-        else:
-            ax.axis("off")  # 隐藏多余的子图
-
-    plt.suptitle(title, fontsize=16)
-    plt.show()
-
-# 调用示例
-visualize_feature_maps(img_embed[0], title="Sample Feature Maps")
 
 # outputs = mask_decoder(image_embeddings=img_embed[0], image_positional_embeddings=pos_embed, sparse_prompt_embeddings=prompt_embed[0], dense_prompt_embeddings=prompt_embed[1], multimask_output=True)
 
