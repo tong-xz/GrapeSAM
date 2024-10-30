@@ -9,13 +9,23 @@ from collections import OrderedDict
 import einops
 from typing import List, Optional, Dict
 import torch.nn.functional as F
+import copy
 
 def _build(cfg):
     type = cfg['type']
     if type == 'FeatureAggregator':
         return FeatureAggregator(in_channels=cfg['in_channels'], out_channels=cfg['out_channels'], hidden_channels=cfg["hidden_channels"], select_layers=cfg['select_layers'])
-    if type == 'FeatureSpliter':
+    elif type == 'FeatureSpliter':
         return SimpleFPN(backbone_channel=cfg['backbone_channel'], in_channels=cfg['in_channels'], out_channels=cfg['out_channels'], num_outs=cfg['num_outs'])
+    elif type == 'GSAMVisionEncoder':
+        ...
+    elif type == 'GSAMPromptEncoder':
+        return GSAMPromptEncoder(hf_pretrain_name=cfg['hf_pretrain_name'], init_cfg=cfg['init_cfg'])
+    elif type == 'GSAMMaskDecoder':
+        return GSAMMaskDecoder(hf_pretrain_name=cfg['hf_pretrain_name'], init_cfg=cfg['init_cfg'])
+    else:
+        return NotImplementedError
+
 
 
 
@@ -241,6 +251,110 @@ class SimpleFPN(nn.Module):
                 outs.append(F.max_pool2d(outs[-1], 1, stride=2))
         return tuple(outs)
 
+class PrompterAnchorRoIPromptHead(nn.Module):
+    def __init__(self,):
+        super().__init__()
+
+
+class PrompterAnchorMaskHead(nn.Module):
+    def __init__(
+            self,
+            mask_decoder_cfg,
+            in_channels,
+            roi_feat_size=14,
+            per_pointset_point=5,
+            with_sincos=True,
+            multimask_output=False,
+            attention_similarity=None,
+            target_embedding=None,
+            output_attentions=None,
+            class_agnostic=False,
+            loss_mask: dict = dict(type='CrossEntropyLoss', use_mask=True, loss_weight=1.0),
+            init_cfg=None
+            ):
+        super().__init__()
+
+        self.in_channels = in_channels
+        self.roi_feat_size = roi_feat_size
+        self.per_pointset_point = per_pointset_point
+        self.with_sincos = with_sincos
+        self.multimask_output = multimask_output
+        self.attention_similarity = attention_similarity
+        self.target_embedding = target_embedding
+        self.output_attentions = output_attentions
+
+        self.mask_decoder = _build(mask_decoder_cfg)
+
+        prompt_encoder_cfg = dict(
+            type='GSamPromptEncoder',
+            hf_pretrain_name=copy.deepcopy(mask_decoder_cfg.get('hf_pretrain_name')),
+            init_cfg=copy.deepcopy(mask_decoder_cfg.get('init_cfg')),
+        )
+        prompt_encoder = _build(prompt_encoder_cfg)
+        self.no_mask_embed = prompt_encoder.prompt_encoder.no_mask_embed
+
+        if with_sincos:
+            num_sincos = 2
+        else:
+            num_sincos = 1
+        self.point_emb = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, 3, stride=2, padding=1),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(inplace=True),
+            nn.Flatten(),
+            nn.Linear(in_channels*roi_feat_size**2//4, in_channels),
+            nn.ReLU(inplace=True),
+            nn.Linear(in_channels, in_channels),
+            nn.ReLU(inplace=True),
+            nn.Linear(in_channels, in_channels * num_sincos * per_pointset_point)
+        )
+        #TODO cross entropy loss
+
+
+        self.class_agnostic = class_agnostic
+
+    def forward(self, x, image_embeddings, image_positional_embeddings, roi_img_ids=None):
+        img_bs = image_embeddings.shape[0]
+        roi_bs = x.shape[0]
+        image_embedding_size = image_embeddings.shape[-2:]
+
+        point_embeddings = self.point_emb(x)
+        point_embeddings = einops.rearrange(point_embeddings, 'b (n c) -> b n c', n=self.per_pointset_point)
+        if self.with_sincos:
+            point_embeddings = torch.sin(point_embeddings[..., ::2]) + point_embeddings[..., 1::2]
+
+        # (B * N_set), N_point, C
+        sparse_embeddings = point_embeddings.unsqueeze(1)
+        num_roi_per_image = torch.bincount(roi_img_ids.long())
+
+        # deal with the case that there is no roi in an image
+        num_roi_per_image = torch.cat([num_roi_per_image, torch.zeros(img_bs - len(num_roi_per_image), device=num_roi_per_image.device, dtype=num_roi_per_image.dtype)])
+
+        dense_embeddings = self.no_mask_embed.weight.reshape(1, -1, 1, 1).expand(roi_bs, -1, image_embedding_size[0], image_embedding_size[1])
+         # get image embeddings with num_roi_per_image
+        image_embeddings = image_embeddings.repeat_interleave(num_roi_per_image, dim=0)
+        image_positional_embeddings = image_positional_embeddings.repeat_interleave(num_roi_per_image, dim=0)
+
+        low_res_masks, iou_predictions, mask_decoder_attentions = self.mask_decoder(
+            image_embeddings=image_embeddings,
+            image_positional_embeddings=image_positional_embeddings,
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output=self.multimask_output,
+            attention_similarity=self.attention_similarity,
+            target_embedding=self.target_embedding,
+            output_attentions=self.output_attentions,
+        )
+        h, w = low_res_masks.shape[-2:]
+        low_res_masks = low_res_masks.reshape(roi_bs, -1, h, w)
+        iou_predictions = iou_predictions.reshape(roi_bs, -1)
+        return low_res_masks, iou_predictions
+
+    def get_targets(
+            self,
+                    ):
+                    ...
+
 
 
 '''
@@ -272,7 +386,6 @@ def _load_weights(model, name, ckpt_path, device):
             print(f"Missing keys: {missing_keys}")
         if len(unexpected_keys) > 0:
             print(f"Unexpected keys: {unexpected_keys}")
-
 
 class GSAMVisionEncoder(nn.Module):
     '''

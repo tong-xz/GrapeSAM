@@ -5,7 +5,7 @@ import cv2
 from matplotlib import pyplot as plt
 import numpy as np
 
-from model.sam import GSAMVisionEncoder, GSAMPromptEncoder, GSAMMaskDecoder, GSAMPositionalEmbedding
+from model.rsprompter import GSAMVisionEncoder, GSAMPromptEncoder, GSAMMaskDecoder, GSAMPositionalEmbedding
 import numpy as np
 import matplotlib.pyplot as plt
 import gc
@@ -41,8 +41,8 @@ input_points = [[[1353, 2730],[1409, 2822]]]
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 image_tensor = torch.from_numpy(image).unsqueeze(0).permute(0, 3, 1, 2).float().to(device)   # numpy -> tensor
-point_tensor = torch.from_numpy(input_points).float().unsqueeze(0).unsqueeze(0).to(device)
-input_labels = torch.ones(input_points.shape[0], dtype= torch.long).unsqueeze(0).unsqueeze(0).to(device)
+point_tensor = torch.tensor(input_points).to(device)
+# input_labels = torch.ones(input_points.shape[0], dtype= torch.long).unsqueeze(0).unsqueeze(0).to(device)
 
 
 hf_name = "pretrain/sam-vit-base/"
