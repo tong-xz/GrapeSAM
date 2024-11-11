@@ -6,8 +6,8 @@ import torch.nn as nn
 import math
 from typing import Optional
 
-# ----------------RSPrompter related--------------------------------
-
+# ----------------Prompter related--------------------------------
+# Auxiliary functions
 class SinePositionalEncoding(nn.Module):
     """Position encoding with sine and cosine functions.
 
@@ -95,6 +95,30 @@ class SinePositionalEncoding(nn.Module):
         return (f'{self.__class__.__name__}(num_feats={self.num_feats}, '
                 f'temperature={self.temperature}, normalize={self.normalize}, '
                 f'scale={self.scale}, eps={self.eps})')
+
+
+def CrossEntropyLoss():
+    ...
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
