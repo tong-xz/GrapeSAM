@@ -251,9 +251,11 @@ class SimpleFPN(nn.Module):
                 outs.append(F.max_pool2d(outs[-1], 1, stride=2))
         return tuple(outs)
 
+# TODO how to convert base roi functions
 class PrompterAnchorRoIPromptHead(nn.Module):
     def __init__(self,):
         super().__init__()
+        
 
 
 class PrompterAnchorMaskHead(nn.Module):
@@ -309,8 +311,7 @@ class PrompterAnchorMaskHead(nn.Module):
             nn.Linear(in_channels, in_channels * num_sincos * per_pointset_point)
         )
         #TODO cross entropy loss
-
-
+        self.loss_mask = []
         self.class_agnostic = class_agnostic
 
     def forward(self, x, image_embeddings, image_positional_embeddings, roi_img_ids=None):
@@ -352,11 +353,52 @@ class PrompterAnchorMaskHead(nn.Module):
 
     def get_targets(
             self,
-                    ):
-                    ...
+            sampling_results: List[dict],
+            batch_gt_instances: List[dict],
+            rcnn_train_cfg: Dict) -> Tensor:
+        pos_proposals = [res.pos_priors for res in sampling_results]
+        pos_assigned_gt_inds = [res.pos_assigned_gt_inds for res in sampling_results]
+
+        gt_masks = [res.masks for res in batch_gt_instances]
+        mask_targets_list = []
+        mask_size = rcnn_train_cfg.mask_size
+        device = pos_proposals[0].device
+
+        for pos_gt_inds, gt_mask in zip(pos_assigned_gt_inds, gt_masks):
+            if len(pos_gt_inds)==0:
+                mask_targets = torch.zeros((0,) + mask_size, device=device, dtype=torch.float32)
+            else:
+                mask_targets = gt_mask[pos_gt_inds.cpu()].to_tensor(dtype=torch.float32, device=device)
+            mask_targets_list.append(mask_targets)
+        mask_targets = torch.cat(mask_targets_list)
+        return mask_targets
+    
+
+    def loss_and_target(
+            self,
+            mask_preds: Tensor,
+            sampling_results: List[dict],
+            batch_gt_instances: List[dict],
+            rcnn_train_cfg: Dict
+    ) -> dict:
+        mask_targets = self.get_targets(sampling_results=sampling_results, batch_gt_instances=batch_gt_instances, rcnn_train_cfg=rcnn_train_cfg)
+        pos_labels = torch.cat([res.pos_gt_labels for res in sampling_results])
+
+        mask_preds = F.interpolate(mask_preds, size=mask_targets.shape[-2:], mode='bilinear', align_corners=False)
+        loss = Dict()
+        if mask_preds.size(0) == 0:
+            loss_mask = mask_preds.sum()
+        else:
+            if self.class_agnostic:
+                loss_mask = self.loss_mask(mask_preds, mask_targets, torch.zeros_like(pos_labels))
+            else:
+                loss_mask = self.loss_mask(mask_preds, mask_targets, pos_labels)
+        loss['loss_mask'] = loss_mask
+        return dict(loss_mask=loss, mask_targets=mask_targets)
 
 
 
+ 
 '''
 ====================================================================================================
 ===========================================SAM RELATED==============================================

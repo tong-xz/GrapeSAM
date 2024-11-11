@@ -2,6 +2,100 @@ import numpy as np
 from matplotlib import pyplot as plt
 import torch
 import torchvision.transforms as transforms
+import torch.nn as nn
+import math
+from typing import Optional
+
+# ----------------RSPrompter related--------------------------------
+
+class SinePositionalEncoding(nn.Module):
+    """Position encoding with sine and cosine functions.
+
+    This implementation follows the method described in
+    'End-to-End Object Detection with Transformers' (https://arxiv.org/pdf/2005.12872).
+
+    Args:
+        num_feats (int): The feature dimension for each position
+            along x-axis or y-axis. Note the final returned dimension
+            for each position is 2 times this value.
+        temperature (int, optional): The temperature used for scaling
+            the position embedding. Defaults to 10000.
+        normalize (bool, optional): Whether to normalize the position
+            embedding. Defaults to False.
+        scale (float, optional): A scale factor that scales the position
+            embedding. Used only when `normalize` is True. Defaults to 2*pi.
+        eps (float, optional): A value added to the denominator for
+            numerical stability. Defaults to 1e-6.
+        offset (float): Offset added to embedding when doing normalization.
+            Defaults to 0.
+    """
+
+    def __init__(self,
+                 num_feats: int,
+                 temperature: int = 10000,
+                 normalize: bool = False,
+                 scale: float = 2 * math.pi,
+                 eps: float = 1e-6,
+                 offset: float = 0.) -> None:
+        super().__init__()
+        if normalize:
+            assert isinstance(scale, (float, int)), 'When normalize is set, scale should be a float or int.'
+        self.num_feats = num_feats
+        self.temperature = temperature
+        self.normalize = normalize
+        self.scale = scale
+        self.eps = eps
+        self.offset = offset
+
+    def forward(self, mask: torch.Tensor, input: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Forward function for SinePositionalEncoding.
+
+        Args:
+            mask (Tensor): ByteTensor mask. Non-zero values represent
+                ignored positions, while zero values mean valid positions.
+                Shape [bs, h, w].
+            input (Tensor, optional): Input image/feature Tensor.
+                Shape [bs, c, h, w].
+
+        Returns:
+            pos (Tensor): Position embedding with shape [bs, num_feats*2, h, w].
+        """
+        assert not (mask is None and input is None), "Either 'mask' or 'input' must be provided."
+
+        if mask is not None:
+            B, H, W = mask.size()
+            device = mask.device
+            mask = mask.to(torch.int)
+            not_mask = 1 - mask  # Logical NOT operation
+            y_embed = not_mask.cumsum(1, dtype=torch.float32)
+            x_embed = not_mask.cumsum(2, dtype=torch.float32)
+        else:
+            B, _, H, W = input.shape
+            device = input.device
+            x_embed = torch.arange(1, W + 1, dtype=torch.float32, device=device).view(1, 1, -1).repeat(B, H, 1)
+            y_embed = torch.arange(1, H + 1, dtype=torch.float32, device=device).view(1, -1, 1).repeat(B, 1, W)
+
+        if self.normalize:
+            y_embed = (y_embed + self.offset) / (y_embed[:, -1:, :] + self.eps) * self.scale
+            x_embed = (x_embed + self.offset) / (x_embed[:, :, -1:] + self.eps) * self.scale
+
+        dim_t = torch.arange(self.num_feats, dtype=torch.float32, device=device)
+        dim_t = self.temperature**(2 * (dim_t // 2) / self.num_feats)
+
+        pos_x = x_embed[:, :, :, None] / dim_t
+        pos_y = y_embed[:, :, :, None] / dim_t
+
+        pos_x = torch.stack((pos_x[:, :, :, 0::2].sin(), pos_x[:, :, :, 1::2].cos()), dim=4).view(B, H, W, -1)
+        pos_y = torch.stack((pos_y[:, :, :, 0::2].sin(), pos_y[:, :, :, 1::2].cos()), dim=4).view(B, H, W, -1)
+        pos = torch.cat((pos_y, pos_x), dim=3).permute(0, 3, 1, 2)
+        return pos
+
+    def __repr__(self) -> str:
+        """String representation of the module."""
+        return (f'{self.__class__.__name__}(num_feats={self.num_feats}, '
+                f'temperature={self.temperature}, normalize={self.normalize}, '
+                f'scale={self.scale}, eps={self.eps})')
+
 
 
 # ----------------SAM related--------------------------------
@@ -125,10 +219,6 @@ def _show_masks(masks, ax, random_colors=False, alpha=0.35):
     
     # Display the masks
     ax.imshow(masks_image)
-
-
-
-#-----------------------------------
 
 
 
