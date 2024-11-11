@@ -1,23 +1,10 @@
-# Ignore the data directory and its contents
 data/
-
-# Ignore compiled Python files and cache directories
 *.pyc
 __pycache__/
 model/__pycache__/
 
-# Ignore weights, WandB logs, and pretrain directories
+
 weights/
 wandb/
 pretrain/
 
-# Allow specific files to be tracked (negating rules)
-!*.py       # Allow Python files
-!.gitignore # Allow this .gitignore file itself
-!*.ipynb    # Allow Jupyter notebooks
-!*.md       # Allow Markdown files
-!sam.yaml   # Allow sam.yaml file
-!pretrain/download_hf.sh # Allow this specific file in pretrain/
-
-# Ensure subdirectories are not ignored if tracked specifically
-!*/

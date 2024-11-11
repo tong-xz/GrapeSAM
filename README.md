@@ -12,11 +12,15 @@ https://blog.csdn.net/qq_61676281/article/details/131845706
 
 How to download huggingface model weights?
 ```bash
-bash pretrain/download_hf.sh facebook/sam-vit-base sam-vit-base
+cd pretrain
+bash download_huggingface.sh facebook/sam-vit-huge sam-vit-huge
+cd ..
 ```
 
 ## Train
-
+```python
+python3 train.py --batch_size 4 --epoch_num 5 
+```
 
 ## Test
 

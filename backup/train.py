@@ -1,3 +1,9 @@
+'''
+old point decoder train model, based on segment anything original code
+
+'''
+
+
 import torchvision.transforms as transforms
 import torch
 import sys
@@ -138,6 +144,7 @@ def train(config):
     os.makedirs(SAVE_DIR, exist_ok=True)
     ckp_save_path = os.path.join(SAVE_DIR, f"point_decoder_{time_stamp}.pth")
     torch.save(point_decoder.state_dict(), ckp_save_path)
+    print(f"Models saved at {ckp_save_path}")
 
 
 def main(config):
@@ -161,11 +168,6 @@ if __name__ == "__main__":
     parser.add_argument("--root_dir", default="./data/wgisd", action="store", type=str)
     parser.add_argument("--save_dir", default="./weights/wgisd", action="store", type=str)
     parser.add_argument("--sam_ckpt", type=str, default=None)
-    parser.add_argument(
-        "--use_crop",
-        action="store_true",
-        help="specify whether use random crop images for training",
-    )
     parser.add_argument("--wandb", action="store_true")
 
     args = parser.parse_args()

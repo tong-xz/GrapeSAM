@@ -5,7 +5,7 @@ import cv2
 from matplotlib import pyplot as plt
 import numpy as np
 
-from model.rsprompter import GSAMVisionEncoder, GSAMPromptEncoder, GSAMMaskDecoder, GSAMPositionalEmbedding
+from model.prompter import GSAMVisionEncoder, GSAMPromptEncoder, GSAMMaskDecoder, GSAMPositionalEmbedding
 import numpy as np
 import matplotlib.pyplot as plt
 import gc
