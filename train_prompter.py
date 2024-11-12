@@ -1,17 +1,15 @@
 import argparse
 from model import build_loader, build_gsam
 import torch
-from model.point_decoder import PointDecoder
+from model.point_decoder_n import PointDecoder
 import torch.nn as nn
-from model.segment_anything import (
-    sam_model_registry,
-    SamAutomaticMaskGenerator,
-    SamPredictor,
-    build_sam,
-    build_sam_vit_b,
-    build_sam_vit_h,
-    build_sam_vit_l,
-)
+import time
+import os
+
+'''
+
+new train method based on hf weights and transformer functions
+'''
 
 def train(config):
     # build dataloader
@@ -39,9 +37,16 @@ def train(config):
     }
     vision_encoder = build_gsam(cfg).to(device).eval()
 
-     # initialize sam related vairables
-    sam = build_sam_vit_h(checkpoint=config["sam_ckpt"]).to(device).eval()
-    point_decoder = PointDecoder(sam).to(device)
+    cfg1 = {
+        'type': 'GSAMMaskDecoder',
+        'hf_pretrain_name': "pretrain/sam-vit-huge/",
+        'init_cfg': {'checkpoint': '/home/xz/Dev/GrapeSAM/pretrain/sam-vit-huge/pytorch_model.bin'},
+        'extra_cfg': None,
+        'device': device
+    }
+    mask_decoder = build_gsam(cfg1).mask_decoder
+
+    point_decoder = PointDecoder(mask_decoder).to(device)
 
     n_parameters = sum(p.numel() for p in point_decoder.parameters() if p.requires_grad)
     print("---Decoder Parameters: %.2fM" % (n_parameters / 1e6,))
@@ -92,6 +97,16 @@ def train(config):
         print(
             f"Epoch [{epoch + 1}/{EPOCH_NUM}], Loss: {running_loss / len(train_loader)}, Validation Loss: {val_loss / len(val_loader)}"
         )
+
+    # save checkpoint
+    current_timestamp = time.time()
+    time_stamp = time.strftime("%m-%d-%H:%M:%S", time.localtime(current_timestamp))
+    os.makedirs(SAVE_DIR, exist_ok=True)
+    ckp_save_path = os.path.join(SAVE_DIR, f"point_decoder_{time_stamp}.pth")
+    torch.save(point_decoder.state_dict(), ckp_save_path)
+    print(f"Models saved at {ckp_save_path}")
+
+
 
 
 

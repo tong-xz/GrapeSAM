@@ -5,6 +5,7 @@ from transformers.models.sam.modeling_sam import (
     SamModel, SamVisionEncoder, SamMaskDecoder, SamPositionalEmbedding, SamPromptEncoder
 )
 from collections import OrderedDict
+from typing import Optional
 
 
 '''
@@ -21,7 +22,7 @@ def build_gsam(cfg):
     elif type == 'GSAMPromptEncoder':
         return GSAMPromptEncoder(hf_pretrain_name=cfg['hf_pretrain_name'], init_cfg=cfg['init_cfg'])
     elif type == 'GSAMMaskDecoder':
-        return GSAMMaskDecoder(hf_pretrain_name=cfg['hf_pretrain_name'], init_cfg=cfg['init_cfg'])
+        return GSAMMaskDecoder(hf_pretrain_name=cfg['hf_pretrain_name'], init_cfg=cfg['init_cfg'], extra_cfg=cfg['extra_cfg'], device=cfg['device'])
     else:
         return NotImplementedError
 

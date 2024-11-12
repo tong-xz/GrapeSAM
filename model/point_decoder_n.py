@@ -41,8 +41,10 @@ class ROIHeadMLP(nn.Module):
 
 
 class PointDecoder(nn.Module):
-    def __init__(self, sam) -> None:
+    def __init__(self, mask_decoder) -> None:
         super().__init__()
+
+        
         transformer_dim = 256
         activation = nn.GELU
         self.transformer = TwoWayTransformer(
@@ -62,21 +64,50 @@ class PointDecoder(nn.Module):
                 transformer_dim // 4, transformer_dim // 8, kernel_size=2, stride=2
             ),
             activation(),
-            # nn.ConvTranspose2d(transformer_dim // 16, 1, kernel_size=2, stride=2),  # 新增的上采样层，将通道数调整为 1
         )
+
         self.output_hypernetworks_mlp = MLP(
             transformer_dim, transformer_dim, transformer_dim // 8, 3
         )
-        self.transformer.load_state_dict(sam.mask_decoder.transformer.state_dict())
-        self.output_upscaling.load_state_dict(
-            sam.mask_decoder.output_upscaling.state_dict()
-        )
+
         
-        self.output_hypernetworks_mlp.load_state_dict(
-            sam.mask_decoder.output_hypernetworks_mlps[0].state_dict()
-        )
- 
-        from segment_anything.modeling.prompt_encoder import PositionEmbeddingRandom
+        transformer_state_dict = mask_decoder.transformer.state_dict()
+        new_transformer_state_dict = {}
+        
+        '''
+        different eps: 
+        'layers.0.layer_norm1': LayerNorm((256,), eps=1e-06, elementwise_affine=True)
+        'layers.0.norm1': LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+        '''
+        for k, v in transformer_state_dict.items():
+            # 替换 'layer_norm' 为 'norm'
+            new_key = k.replace('layer_norm', 'norm')
+            new_transformer_state_dict[new_key] = v
+
+        self.transformer.load_state_dict(new_transformer_state_dict)
+
+        # 逐层加载
+        self.output_upscaling[0].load_state_dict(mask_decoder.upscale_conv1.state_dict())
+        self.output_upscaling[1].load_state_dict(mask_decoder.upscale_layer_norm.state_dict())
+        self.output_upscaling[3].load_state_dict(mask_decoder.upscale_conv2.state_dict())
+        
+        self.output_hypernetworks_mlp.layers[0].load_state_dict({
+            'weight': mask_decoder.output_hypernetworks_mlps[0].state_dict()['layers.0.weight'],
+            'bias': mask_decoder.output_hypernetworks_mlps[0].state_dict()['layers.0.bias']
+        })
+
+        self.output_hypernetworks_mlp.layers[1].load_state_dict({
+            'weight': mask_decoder.output_hypernetworks_mlps[0].state_dict()['proj_in.weight'],
+            'bias': mask_decoder.output_hypernetworks_mlps[0].state_dict()['proj_in.bias']
+        })
+
+        self.output_hypernetworks_mlp.layers[2].load_state_dict({
+            'weight': mask_decoder.output_hypernetworks_mlps[0].state_dict()['proj_out.weight'],
+            'bias': mask_decoder.output_hypernetworks_mlps[0].state_dict()['proj_out.bias']
+        })
+        
+
+        from .util import PositionEmbeddingRandom
 
         embed_dim = 256
         self.image_embedding_size = (64, 64)
