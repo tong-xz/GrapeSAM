@@ -4,7 +4,7 @@ from torch import Tensor
 
 
 import einops
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 import torch.nn.functional as F
 import copy
 
@@ -241,11 +241,198 @@ class SimpleFPN(nn.Module):
                 outs.append(F.max_pool2d(outs[-1], 1, stride=2))
         return tuple(outs)
 
+from .utils import SinePositionalEncoding
 # TODO how to convert base roi functions
 class PrompterAnchorRoIPromptHead(nn.Module):
-    def __init__(self,):
+    def __init__(self, with_extra_pe):
         super().__init__()
+        if with_extra_pe:
+            #TODO bbox_roi_extractor
+            out_channels = self.bbox_roi_extractor.out_channels
+            positional_encoding = dict(num_feats = out_channels // 2, normalize = True)
+            self.extra_pe = SinePositionalEncoding(**positional_encoding)
+
+        self.mask_roi_extractor = None
+        self.mask_head = None
+        self.bbox_assigner = None
+        self.bbox_sampler = None
+        self.bbox_loss = None
+        self.mask_loss = None
+
+
+
+    def _mask_forward(
+            self,
+            x: Tuple[Tensor],
+            rois: Tensor=None,
+            pos_inds: Optional[Tensor] = None,
+            bbox_feats: Optional[Tensor] =None,
+            image_embeddings = None,
+            image_positional_embeddings = None
+    ) -> dict:
         
+        assert ((rois is not None) ^ (pos_inds is not None and bbox_feats is not None))
+        if rois is not None:
+            mask_feats = self.mask_roi_extractor(x[:self.mask_roi_extractor.num_inputs], rois)
+            #TODO with shared head?
+        else:
+            assert bbox_feats is not None
+            mask_feats = bbox_feats[pos_inds]
+
+        mask_preds, iou_predictions = self.mask_head(
+            mask_feats,
+            image_embeddings = image_embeddings,
+            image_positional_embeddings = image_positional_embeddings,
+            roi_img_ids=rois[:, 0] if rois is not None else None,
+        )
+        mask_results = dict(mask_preds=mask_preds, mask_feats=mask_feats, iou_predictions=iou_predictions)
+        return mask_results
+    
+    '''
+    replace SamplingResult type to list[dict]
+    replace InstanceData type to dict
+    
+    '''
+    def mask_loss(
+            self,
+            x: Tuple[Tensor],
+            sampling_results: List[dict],
+            bbox_feats: Tensor,
+            batch_gt_instances: List[dict],
+            image_embeddings=None,
+            image_positional_embeddings=None
+    ) -> dict:
+        
+        #TODO self.share_roi_extractor where comes from?
+        if not self.share_roi_extractor:
+            from model.utils import bbox2roi
+            pos_rois = bbox2roi([res.pos_priors for res in sampling_results])
+            if len(pos_rois) == 0:
+                print('no pos rois')
+                return dict(loss_mask=dict(0 * x[0].sum()))
+            
+            mask_results = self._mask_forward(x, pos_rois, 
+                                              image_embeddings=image_embeddings, 
+                                              image_positional_embeddings=image_positional_embeddings)
+        else:
+            pos_inds = []
+            device = bbox_feats.device
+            for res in sampling_results:
+                pos_inds.append(
+                    torch.ones(
+                        res.pos_priors.shape[0],
+                        device=device,
+                        dtype=torch.uint8))
+                pos_inds.append(
+                    torch.zeros(
+                        res.neg_priors.shape[0],
+                        device=device,
+                        dtype=torch.uint8))            
+            pos_inds = torch.cat(pos_inds)
+            
+            mask_results = self._mask_forward(
+                x, pos_inds=pos_inds, bbox_feats=bbox_feats)
+            
+        mask_loss_and_target = self.mask_head.loss_and_target(
+            mask_preds = mask_results['mask_preds'],
+            sampling_results = sampling_results,
+            batch_gt_instances = batch_gt_instances,
+            rcnn_train_cfg = self.train_cfg 
+        )
+        mask_results.update(loss_mask = mask_loss_and_target['loss_mask'])
+        return mask_results
+
+
+    def loss(
+            self,
+            x: Tuple[Tensor],
+            rpn_results_list: List[Dict],
+            batch_data_samples: List[Dict],
+            # extra inputs
+            image_embeddings = None,
+            image_positional_embeddings = None
+
+    ) -> dict:
+        assert len(rpn_results_list) == len(batch_data_samples)
+        from .utils import unpack_gt_instances
+
+        batch_gt_instances, batch_gt_instances_ignore, _ = unpack_gt_instances(batch_data_samples)
+
+        if hasattr(self, 'extra_pe'):
+            bs, _, h, w = x[0].shape
+            mask_pe = torch.zeros((bs, h, w), device=x[0].device, dtype=torch.bool)
+            img_feats_pe = self.extra_pe(mask_pe)
+            outputs = []
+            for i in range(len(x)):
+                output = x[i] + F.interpolate(img_feats_pe, size=x[i].shape[-2:], mode='bilinear', align_corners=False)
+                outputs.append(output)
+            x = tuple(outputs)
+            
+        # assign gts and sample proposals
+        num_imgs = len(batch_data_samples)
+        sampling_results = []
+
+        for i in range(num_imgs):
+            # rename rpn_results.bboxes to rpn_results.priors
+            rpn_results = rpn_results_list[i]
+            rpn_results.priors = rpn_results.pop('bboxes')
+
+            #TODO what are these two modules?
+
+            assign_result = self.bbox_assigner.assign(
+                rpn_results,
+                batch_gt_instances[i],
+                batch_gt_instances_ignore[i]
+            )
+            sampling_result = self.bbox_sampler.sample(
+                assign_result,
+                rpn_results,
+                batch_gt_instances[i],
+                feats = [lvl_feat[i][None] for lvl_feat in x]
+            )
+            sampling_results.append(sampling_result)
+
+        losses = dict()
+        
+        #TODO BBOX HEAD LOSS how to solve?
+        if self.with_bbox:
+            bbox_results = self.bbox_loss(x, sampling_results)
+            losses.update(bbox_results['loss_bbox'])
+
+        #TODO MASK HEAD LOSS how to solve?
+        if self.with_mask:
+            mask_results = self.mask_loss(
+                x, sampling_result, bbox_results['bbox_feats'], batch_gt_instances,
+                image_embeddings=image_embeddings,
+                image_positional_embeddings=image_positional_embeddings
+            )
+            losses.update(mask_results['loss_mask'])
+
+
+        return losses
+
+    # TODO two prediction functions for inference
+    def predict_mask(
+            self,
+    ) -> List:
+        ...
+
+    def predict(
+            
+    ) -> List:
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class PrompterAnchorMaskHead(nn.Module):
@@ -385,7 +572,6 @@ class PrompterAnchorMaskHead(nn.Module):
                 loss_mask = self.loss_mask(mask_preds, mask_targets, pos_labels)
         loss['loss_mask'] = loss_mask
         return dict(loss_mask=loss, mask_targets=mask_targets)
-
 
 
  

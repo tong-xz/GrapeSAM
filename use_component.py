@@ -1,6 +1,6 @@
 import torch
 from model.segment_anything import build_sam_vit_h, SamPredictor
-from model.util import predict_masks, vis_pred
+from model.utils import predict_masks, vis_pred
 import cv2
 from matplotlib import pyplot as plt
 import numpy as np

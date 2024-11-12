@@ -107,7 +107,7 @@ class PointDecoder(nn.Module):
         })
         
 
-        from .util import PositionEmbeddingRandom
+        from .utils import PositionEmbeddingRandom
 
         embed_dim = 256
         self.image_embedding_size = (64, 64)

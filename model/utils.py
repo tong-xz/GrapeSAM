@@ -4,7 +4,8 @@ import torch
 import torchvision.transforms as transforms
 import torch.nn as nn
 import math
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple, Any, List
+from torch import Tensor
 
 # ----------------Prompter related--------------------------------
 # Auxiliary functions
@@ -151,20 +152,75 @@ class PositionEmbeddingRandom(nn.Module):
 
 
 
+def bbox2roi(bbox_list: List[Tensor]) -> Tensor:
+    """Convert a list of bboxes to roi format.
+
+    Args:
+        bbox_list (List[Tensor]): A list of bbox tensors corresponding to a batch 
+            of images. Each tensor has shape (n, 4) where n is the number of boxes
+            and the 4 columns represent [x1, y1, x2, y2].
+
+    Returns:
+        Tensor: shape (n, 5) where n is the total number of boxes across all images.
+            Each row contains [batch_ind, x1, y1, x2, y2] where batch_ind indicates 
+            which image the box belongs to.
+    """
+    rois_list = []
+    for img_id, bboxes in enumerate(bbox_list):
+        # Ensure bboxes is a tensor
+        if not isinstance(bboxes, Tensor):
+            bboxes = torch.tensor(bboxes, dtype=torch.float32)
+            
+        # Create image index column
+        img_inds = torch.full((bboxes.size(0), 1), img_id, 
+                            dtype=bboxes.dtype, 
+                            device=bboxes.device)
+        
+        # Concatenate image index with bbox coordinates
+        rois = torch.cat([img_inds, bboxes], dim=-1)
+        rois_list.append(rois)
+    
+    # Concatenate all ROIs into single tensor
+    rois = torch.cat(rois_list, 0)
+    return rois
 
 
 
 
+def unpack_gt_instances(batch_data_samples: List) -> tuple:
+    """Unpack ``gt_instances``, ``gt_instances_ignore`` and ``img_metas`` based
+    on ``batch_data_samples``
 
+    Args:
+        batch_data_samples (List[:obj:`DetDataSample`]): The Data
+            Samples. It usually includes information such as
+            `gt_instance`, `gt_panoptic_seg` and `gt_sem_seg`.
 
+    Returns:
+        tuple:
 
+            - batch_gt_instances (list[:obj:`InstanceData`]): Batch of
+                gt_instance. It usually includes ``bboxes`` and ``labels``
+                attributes.
+            - batch_gt_instances_ignore (list[:obj:`InstanceData`]):
+                Batch of gt_instances_ignore. It includes ``bboxes`` attribute
+                data that is ignored during training and testing.
+                Defaults to None.
+            - batch_img_metas (list[dict]): Meta information of each image,
+                e.g., image size, scaling factor, etc.
+    """
+    batch_gt_instances = []
+    batch_gt_instances_ignore = []
+    batch_img_metas = []
+    for data_sample in batch_data_samples:
+        batch_img_metas.append(data_sample.metainfo)
+        batch_gt_instances.append(data_sample.gt_instances)
+        if 'ignored_instances' in data_sample:
+            batch_gt_instances_ignore.append(data_sample.ignored_instances)
+        else:
+            batch_gt_instances_ignore.append(None)
 
-
-
-
-
-
-
+    return batch_gt_instances, batch_gt_instances_ignore, batch_img_metas
 
 
 
@@ -290,7 +346,6 @@ def _show_masks(masks, ax, random_colors=False, alpha=0.35):
     
     # Display the masks
     ax.imshow(masks_image)
-
 
 
 

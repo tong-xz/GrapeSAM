@@ -5,6 +5,7 @@ from model.point_decoder_n import PointDecoder
 import torch.nn as nn
 import time
 import os
+import wandb
 
 '''
 
@@ -57,6 +58,17 @@ def train(config):
 
     mseloss = nn.MSELoss()
 
+    if USE_WANDB:
+        wandb.login()
+
+        run = wandb.init(
+            # Set the project where this run will be logged
+            project="Vivid-exp",
+            name="dynamic heatmap",
+            tags=["init"],
+        )
+
+
      # start training
     for epoch in range(EPOCH_NUM):
         point_decoder.train()
@@ -97,6 +109,21 @@ def train(config):
         print(
             f"Epoch [{epoch + 1}/{EPOCH_NUM}], Loss: {running_loss / len(train_loader)}, Validation Loss: {val_loss / len(val_loader)}"
         )
+
+        if USE_WANDB:
+            wandb.log(
+                {
+                    "Train": running_loss / len(train_loader),
+                    "Val": val_loss / len(val_loader),
+                    # "MAE": MAE_loss,
+                    # "RMSE": RMSE_loss
+                },
+                step=epoch,
+            )
+
+    if USE_WANDB:
+        wandb.finish()
+        print("Training complete")
 
     # save checkpoint
     current_timestamp = time.time()
