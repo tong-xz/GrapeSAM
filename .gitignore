@@ -6,4 +6,5 @@ model/__pycache__/
 weights/
 wandb/
 pretrain/
+!pretrain/download_hf.sh
 
