@@ -10,6 +10,7 @@ import collections.abc as container_abcs
 from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 
 
@@ -49,9 +50,13 @@ def _nms(heat, kernel=3):
 
 
 def plot_results(image, masks: torch.Tensor = None, points: torch.Tensor = None, bboxes: torch.Tensor = None,
-                 show_num=False, alpha=0.35,dot_size=4, figsize=(20, 20)):
+                 show_num=False, alpha=0.35,dot_size=4, figsize=(20, 20), save_path=None, error=None):
     plt.figure(figsize=figsize) 
     plt.imshow(image)
+
+    if error is not None:
+        plt.text(10, 30, f'error: {error:.4f}', color='red', fontsize=12, 
+                bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
 
     if masks is not None:
         masks = F.interpolate(masks, size=np.array(image).shape[:2])
@@ -87,6 +92,28 @@ def plot_results(image, masks: torch.Tensor = None, points: torch.Tensor = None,
                 if masks is not None:
                     texts = texts[indices.cpu().numpy()]
                 plt.text(points[i, 0], points[i, 1], texts[i], )
+
+    if save_path is not None:
+        save_dir = Path(save_path)
+        # 获取当前目录下最大的数字编号
+        existing_files = [f for f in save_dir.glob('*.png') if f.stem.isdigit()]
+        next_number = 1
+        if existing_files:
+            numbers = [int(f.stem) for f in existing_files]
+            next_number = max(numbers) + 1
+        
+        # 创建新的文件名，使用数字编号
+        new_filename = f"{next_number:06d}.png"  # 使用6位数字，前面补0
+        save_path = save_dir / new_filename
+            
+        save_dir.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_path, bbox_inches='tight', dpi=300)
+        plt.close()
+        
+    else:
+        plt.show()
+
+
 
 
 class DeNormalize(object):
