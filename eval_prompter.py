@@ -48,7 +48,7 @@ def plot_r_square(gt_values, pred_values, save_path='./output/r_square.png'):
     
     return r_squared
 
-def eval(vision_encoder, test_loader, save_dir='./output'):
+def eval(vision_encoder, test_loader, vis, save_dir='./output'):
     total_mae = 0.0
     total_squared_error = 0.0
     point_decoder.eval()
@@ -73,9 +73,10 @@ def eval(vision_encoder, test_loader, save_dir='./output'):
             all_gt_counts.append(float(gt_points.cpu()))
             all_pred_counts.append(pred_points_num)
             
-            img_pil = tensor_to_pil(img)
-            plot_results(img_pil, points=pred['pred_points'].squeeze(), dot_size=8, 
-                        save_path=save_dir, error=err)
+            if vis:
+                img_pil = tensor_to_pil(img)
+                plot_results(img_pil, points=pred['pred_points'].squeeze(), dot_size=8, 
+                            save_path=save_dir, error=err)
             
             total_mae += err
             total_squared_error += err**2
@@ -84,9 +85,10 @@ def eval(vision_encoder, test_loader, save_dir='./output'):
     mae = float(total_mae / cnt)
     rmse = float((total_squared_error / cnt) ** 0.5)
 
-    # 计算并绘制R-square
-    r_squared = plot_r_square(all_gt_counts, all_pred_counts, 
-                            save_path=f'{save_dir}/r_square.png')
+    r_squared = 0
+    if vis:
+        r_squared = plot_r_square(all_gt_counts, all_pred_counts, 
+                                save_path=f'{save_dir}/r_square.png')
     
     print(f"MAE: {mae:.4f}, RMSE: {rmse:.4f}, R²: {r_squared:.4f}")
 
@@ -97,6 +99,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--ckp_path", type=str, required=True, help="checkpoint path")
     parser.add_argument("--output_dir", type=str, default="./output", help="output directory")
+    parser.add_argument("--vis", action="store_true", help="whether output visualization images")
     
     args = parser.parse_args()
     
@@ -128,4 +131,4 @@ if __name__ == "__main__":
     
     test_loader = build_loader(args.root_dir, batch_size=1)['test']
     
-    eval(vision_encoder, test_loader, args.output_dir)
+    eval(vision_encoder, test_loader, args.vis,args.output_dir)
