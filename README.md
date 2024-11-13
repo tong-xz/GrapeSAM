@@ -19,7 +19,7 @@ cd ..
 
 ## Train
 ```python
-python3 train.py --batch_size 4 --epoch_num 5 
+python3 train.py --batch_size 4 --epoch_num 5 --wandb
 ```
 
 ## Test

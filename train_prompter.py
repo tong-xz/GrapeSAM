@@ -157,7 +157,6 @@ if __name__ == "__main__":
     )
     parser.add_argument("--root_dir", default="./data/wgisd", action="store", type=str)
     parser.add_argument("--save_dir", default="./weights/wgisd", action="store", type=str)
-    parser.add_argument("--sam_ckpt", type=str, default=None)
     parser.add_argument("--wandb", action="store_true")
 
     args = parser.parse_args()
