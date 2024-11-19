@@ -54,7 +54,7 @@ def eval(vision_encoder, test_loader, vis, save_dir='./output'):
     point_decoder.eval()
     point_decoder.max_points = 2048
     point_decoder.nms_kernel_size = 3
-    point_decoder.point_threshold = 0.28
+    point_decoder.point_threshold = 0.28 # exp 0.28
     
     # 存储所有的真实值和预测值
     all_gt_counts = []

@@ -37,7 +37,53 @@ class LN2d(nn.Module):
         x = (x - u) / torch.sqrt(s + self.eps)
         x = self.weight[:, None, None] * x + self.bias[:, None, None]
         return x
+
+
+class PrompterAnchor(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.shared_image_embedding = None
+        
+        
+        
+    def _set_grad_false(self, module_list=[]):
+        for module in module_list:
+            module.eval()
+            if isinstance(module, nn.Parameter):
+                module.requires_grad = False
+            for param in module.parameters():
+                param.requires_grad = False
+                
+                
+                
+    def get_image_wide_positional_embeddings(self, size):
+        """
+        Generate positional embeddings for a given input size.
+        Args:
+            size (tuple): Height and width of the input image.
+        Returns:
+            torch.Tensor: Positional embeddings of shape (1, embed_dim, H, W)
+        """
+        h, w = size
+        grid_y, grid_x = torch.meshgrid(
+            torch.arange(h, dtype=torch.float32),
+            torch.arange(w, dtype=torch.float32),
+            indexing='ij'
+        )
+
+        # Normalize coordinates to [-1, 1]
+        grid_y = 2 * grid_y / (h - 1) - 1
+        grid_x = 2 * grid_x / (w - 1) - 1
+
+        # Stack and reshape
+        grid = torch.stack([grid_x, grid_y], dim=0)[None]  # Shape: (1, 2, H, W)
+        
+        return grid
+        
     
+                
+    
+                
 
 class FPN(nn.Module):
     def __init__(
@@ -418,19 +464,9 @@ class PrompterAnchorRoIPromptHead(nn.Module):
         ...
 
     def predict(
-            
+            self,
     ) -> List:
-
-
-
-
-
-
-
-
-
-
-
+        ...
 
 
 
