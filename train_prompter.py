@@ -6,11 +6,28 @@ import torch.nn as nn
 import time
 import os
 import wandb
+import glob
 
 '''
-
 new train method based on hf weights and transformer functions
 '''
+
+def set_seed(seed):
+    # For reproducibility across different runs
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    
+    # For reproducibility on the same machine
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
+    # Also need to set random seeds for numpy and random
+    import numpy as np
+    import random
+    np.random.seed(seed)
+    random.seed(seed)
+
 
 def train(config):
     # build dataloader
@@ -107,7 +124,7 @@ def train(config):
                 val_loss += loss.item()
         
         print(
-            f"Epoch [{epoch + 1}/{EPOCH_NUM}], Loss: {running_loss / len(train_loader)}, Validation Loss: {val_loss / len(val_loader)}"
+            f"Epoch [{epoch + 1}/{EPOCH_NUM}], Train Loss: {running_loss / len(train_loader)}, Val Loss: {val_loss / len(val_loader)}"
         )
 
         if USE_WANDB:
@@ -125,6 +142,21 @@ def train(config):
         wandb.finish()
         print("Training complete")
 
+    # create tmp dir for intermediate checkpoints
+    tmp_save_dir = os.path.join(SAVE_DIR, 'tmp')
+    os.makedirs(tmp_save_dir, exist_ok=True)
+
+    # save intermediate checkpoint every 10 epochs
+    if (epoch + 1) % 10 == 0:
+        tmp_ckp_path = os.path.join(tmp_save_dir, f'point_decoder_epoch_{epoch+1}.pth')
+        torch.save(point_decoder.state_dict(), tmp_ckp_path)
+        print(f"Checkpoint from epoch {epoch+1} saved at {tmp_ckp_path}")
+        
+        # keep only latest 3 checkpoints
+        tmp_ckps = sorted(glob.glob(os.path.join(tmp_save_dir, '*.pth')))
+        if len(tmp_ckps) > 3:
+            os.remove(tmp_ckps[0])  # remove oldest checkpoint
+    
     # save checkpoint
     current_timestamp = time.time()
     time_stamp = time.strftime("%m-%d-%H:%M:%S", time.localtime(current_timestamp))
@@ -139,6 +171,7 @@ def main(config):
     print(f"===========================START============================")
     for k, v in config.items():
         print(f"---SETTING {k} AS {v}")
+    set_seed(42)
     # TODO split train and eval to two functions
     train(config)
     print(f"===========================FINISH===========================")
@@ -153,8 +186,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--epoch_num", default=100, action="store", type=int, required=True
     )
-    parser.add_argument("--root_dir", default="./data/wgisd", action="store", type=str)
-    parser.add_argument("--save_dir", default="./weights/wgisd", action="store", type=str)
+    parser.add_argument("--root_dir", action="store", type=str)
+    parser.add_argument("--save_dir", action="store", type=str)
     parser.add_argument("--wandb", action="store_true")
 
     args = parser.parse_args()

@@ -25,3 +25,7 @@ python3 train.py --batch_size 4 --epoch_num 5 --wandb
 ## Test
 
 ## Eval
+
+```bash
+python3 eval_prompter.py --root_dir ./data/exp/ --ckp_path ./weights/vivid6/point_decoder_11-13-07\:37\:21.pth --vis
+```
