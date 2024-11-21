@@ -8,3 +8,5 @@ wandb/
 pretrain/
 !pretrain/download_hf.sh
 output/
+index.md
+.vscode/

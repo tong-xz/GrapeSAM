@@ -36,6 +36,8 @@ def train(config):
     ROOT_DIR = config["root_dir"]
     USE_WANDB = config["wandb"]
     SAVE_DIR = config["save_dir"]
+    SAM_CKPT = config["sam_ckpt"]
+    HF_PRETRAIN_NAME = config["hf_pretrain_name"]
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -48,8 +50,8 @@ def train(config):
 
     cfg = {
         'type': 'GSAMVisionEncoder',
-        'hf_pretrain_name': "pretrain/sam-vit-huge/",
-        'init_cfg': {'checkpoint': '/home/xz/Dev/GrapeSAM/pretrain/sam-vit-huge/pytorch_model.bin'},
+        'hf_pretrain_name': HF_PRETRAIN_NAME,
+        'init_cfg': {'checkpoint': SAM_CKPT},
         'extra_cfg': None,
         'device': device
     }
@@ -57,11 +59,12 @@ def train(config):
 
     cfg1 = {
         'type': 'GSAMMaskDecoder',
-        'hf_pretrain_name': "pretrain/sam-vit-huge/",
-        'init_cfg': {'checkpoint': '/home/xz/Dev/GrapeSAM/pretrain/sam-vit-huge/pytorch_model.bin'},
+        'hf_pretrain_name': HF_PRETRAIN_NAME,
+        'init_cfg': {'checkpoint': SAM_CKPT},
         'extra_cfg': None,
         'device': device
     }
+    
     mask_decoder = build_gsam(cfg1).mask_decoder
 
     point_decoder = PointDecoder(mask_decoder).to(device)
@@ -186,6 +189,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--epoch_num", default=100, action="store", type=int, required=True
     )
+    parser.add_argument("--sam_ckpt", action="store", type=str)
+    parser.add_argument("--hf_pretrain_name", action="store", type=str)
     parser.add_argument("--root_dir", action="store", type=str)
     parser.add_argument("--save_dir", action="store", type=str)
     parser.add_argument("--wandb", action="store_true")
