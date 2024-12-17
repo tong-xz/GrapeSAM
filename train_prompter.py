@@ -191,12 +191,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--epoch_num", default=100, action="store", type=int, required=True
     )
-<<<<<<< HEAD
+
     parser.add_argument("--config", action="store", type=str, default="config/prompter_huge.yaml")
-=======
+
     parser.add_argument("--sam_ckpt", action="store", type=str)
     parser.add_argument("--hf_pretrain_name", action="store", type=str)
->>>>>>> 949feeef1a453ceb34b6d9bf0e22af026916e2aa
     parser.add_argument("--root_dir", action="store", type=str)
     parser.add_argument("--save_dir", action="store", type=str)
     parser.add_argument("--wandb", action="store_true")

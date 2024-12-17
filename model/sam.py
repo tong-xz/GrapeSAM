@@ -88,6 +88,17 @@ class GSAMPromptEncoder(nn.Module):
             _load_weights(self.prompt_encoder, 'prompt_encoder.', init_cfg['checkpoint'], device)
 
     def forward(self, *args, **kwargs):
+        """
+        Embeds different types of prompts, returning both sparse and dense embeddings.
+
+        Args:
+            points (`torch.Tensor`, *optional*):
+                point coordinates and labels to embed.
+            boxes (`torch.Tensor`, *optional*):
+                boxes to embed
+            masks (`torch.Tensor`, *optional*):
+                masks to embed
+        """
         return self.prompt_encoder(*args, **kwargs)
 
 
@@ -106,6 +117,24 @@ class GSAMMaskDecoder(nn.Module):
             _load_weights(self.mask_decoder, 'mask_decoder.', init_cfg['checkpoint'], device)
 
     def forward(self, *args, **kwargs):
+        """
+        Predict masks given image and prompt embeddings.
+
+        Args:
+            image_embeddings (`torch.Tensor`):
+                the embeddings from the image encoder
+            image_positional_embedding (`torch.Tensor`):
+                positional encoding with the shape of image_embeddings
+            sparse_prompt_embeddings (`torch.Tensor`):
+                The embeddings of the points and boxes
+            dense_prompt_embeddings (`torch.Tensor`):
+                the embeddings of the mask inputs
+            multimask_output (bool):
+                Whether to return multiple masks or a single mask.
+            output_attentions (bool, *optional*):
+                Whether or not to return the attentions tensors of all attention layers.
+        """
+        
         return self.mask_decoder(*args, **kwargs)
 
 
