@@ -1,38 +1,32 @@
-'''
-old point decoder train model, based on segment anything original code
-
-'''
-
-
-import torchvision.transforms as transforms
-import torch
-import sys
-
-# sys.path.insert(0, "/home/xz/Dev/Dream")
-from model.dataset import VividDataset, _split_phases
-from model.segment_anything import (
-    sam_model_registry,
-    SamAutomaticMaskGenerator,
-    SamPredictor,
-    build_sam,
-    build_sam_vit_b,
-    build_sam_vit_h,
-    build_sam_vit_l,
-)
-from backup.point_decoder import PointDecoder
-import torch.nn.functional as F
-import torch.nn as nn
-import wandb
-from datetime import datetime
 import argparse
-from model import build_loader
+from model import build_loader, build_gsam
+import torch
+from model.point_decoder_n import PointDecoder
+import torch.nn as nn
 import time
 import os
-from evaluation import eval
+import wandb
+import glob
 
+'''
+new train method based on hf weights and transformer functions
+'''
 
-def set_seed(seed: int = 1):
-    pass
+def set_seed(seed):
+    # For reproducibility across different runs
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    
+    # For reproducibility on the same machine
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
+    # Also need to set random seeds for numpy and random
+    import numpy as np
+    import random
+    np.random.seed(seed)
+    random.seed(seed)
 
 
 def train(config):
@@ -42,6 +36,8 @@ def train(config):
     ROOT_DIR = config["root_dir"]
     USE_WANDB = config["wandb"]
     SAVE_DIR = config["save_dir"]
+    SAM_CKPT = config["sam_ckpt"]
+    HF_PRETRAIN_NAME = config["hf_pretrain_name"]
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -52,9 +48,26 @@ def train(config):
         loader_dict["test"],
     )
 
-    # initialize sam related vairables
-    sam = build_sam_vit_h(checkpoint=config["sam_ckpt"]).to(device).eval()
-    point_decoder = PointDecoder(sam).to(device)
+    cfg = {
+        'type': 'GSAMVisionEncoder',
+        'hf_pretrain_name': HF_PRETRAIN_NAME,
+        'init_cfg': {'checkpoint': SAM_CKPT},
+        'extra_cfg': None,
+        'device': device
+    }
+    vision_encoder = build_gsam(cfg).to(device).eval()
+
+    cfg1 = {
+        'type': 'GSAMMaskDecoder',
+        'hf_pretrain_name': HF_PRETRAIN_NAME,
+        'init_cfg': {'checkpoint': SAM_CKPT},
+        'extra_cfg': None,
+        'device': device
+    }
+    
+    mask_decoder = build_gsam(cfg1).mask_decoder
+
+    point_decoder = PointDecoder(mask_decoder).to(device)
 
     n_parameters = sum(p.numel() for p in point_decoder.parameters() if p.requires_grad)
     print("---Decoder Parameters: %.2fM" % (n_parameters / 1e6,))
@@ -62,6 +75,7 @@ def train(config):
     optimizer = torch.optim.AdamW(
         list(point_decoder.parameters()), lr=1e-4, weight_decay=1e-5, betas=(0.9, 0.99)
     ) # 0.0001
+
     mseloss = nn.MSELoss()
 
     if USE_WANDB:
@@ -74,7 +88,8 @@ def train(config):
             tags=["init"],
         )
 
-    # start training
+
+     # start training
     for epoch in range(EPOCH_NUM):
         point_decoder.train()
         running_loss = 0.0
@@ -85,7 +100,7 @@ def train(config):
 
             # 冻结encoder参数
             with torch.no_grad():
-                features = sam.image_encoder(imgs)  # torch.Size([b, 256, 64, 64])
+                features = vision_encoder(imgs)[0]  # torch.Size([b, 256, 64, 64])
 
             # 训练decoder
             optimizer.zero_grad()
@@ -97,7 +112,7 @@ def train(config):
 
             running_loss += loss.item()
 
-        # Validation phase
+
         point_decoder.eval()
         val_loss = 0.0
         with torch.no_grad():
@@ -105,23 +120,16 @@ def train(config):
                 imgs = imgs.to(device)
                 gt_heatmaps = heatmaps.to(device)
 
-                features = sam.image_encoder(imgs)
+                features = vision_encoder(imgs)[0]
                 pred_heatmaps = point_decoder(features)["pred_heatmaps"]
 
                 loss = mseloss(pred_heatmaps, gt_heatmaps)
                 val_loss += loss.item()
         
-
-        # if epoch % 10 ==0:
-        #     loss_dict = eval(sam, point_decoder, test_loader)    
-        #     MAE_loss, RMSE_loss = loss_dict['mae'], loss_dict['rmse']
-
         print(
-            f"Epoch [{epoch + 1}/{EPOCH_NUM}], Loss: {running_loss / len(train_loader)}, Validation Loss: {val_loss / len(val_loader)}"
+            f"Epoch [{epoch + 1}/{EPOCH_NUM}], Train Loss: {running_loss / len(train_loader)}, Val Loss: {val_loss / len(val_loader)}"
         )
 
-        # Evaluation phase
-        # metrics = eval(sam, point_decoder, test_loader)
         if USE_WANDB:
             wandb.log(
                 {
@@ -133,11 +141,25 @@ def train(config):
                 step=epoch,
             )
 
-
     if USE_WANDB:
         wandb.finish()
-    print("Training complete")
+        print("Training complete")
 
+    # create tmp dir for intermediate checkpoints
+    tmp_save_dir = os.path.join(SAVE_DIR, 'tmp')
+    os.makedirs(tmp_save_dir, exist_ok=True)
+
+    # save intermediate checkpoint every 10 epochs
+    if (epoch + 1) % 10 == 0:
+        tmp_ckp_path = os.path.join(tmp_save_dir, f'point_decoder_epoch_{epoch+1}.pth')
+        torch.save(point_decoder.state_dict(), tmp_ckp_path)
+        print(f"Checkpoint from epoch {epoch+1} saved at {tmp_ckp_path}")
+        
+        # keep only latest 3 checkpoints
+        tmp_ckps = sorted(glob.glob(os.path.join(tmp_save_dir, '*.pth')))
+        if len(tmp_ckps) > 3:
+            os.remove(tmp_ckps[0])  # remove oldest checkpoint
+    
     # save checkpoint
     current_timestamp = time.time()
     time_stamp = time.strftime("%m-%d-%H:%M:%S", time.localtime(current_timestamp))
@@ -147,10 +169,12 @@ def train(config):
     print(f"Models saved at {ckp_save_path}")
 
 
+
 def main(config):
     print(f"===========================START============================")
     for k, v in config.items():
         print(f"---SETTING {k} AS {v}")
+    set_seed(42)
     # TODO split train and eval to two functions
     train(config)
     print(f"===========================FINISH===========================")
@@ -160,14 +184,15 @@ if __name__ == "__main__":
     # python train.py --batch_size 4 --epoch_num 500 --sam_ckpt ./weights/sam_vit_h_4b8939.pth --wandb
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--batch_size", default=4, action="store", type=int, required=True
+        "--batch_size", default=1, action="store", type=int, required=True
     )
     parser.add_argument(
         "--epoch_num", default=100, action="store", type=int, required=True
     )
-    parser.add_argument("--root_dir", default="./data/wgisd", action="store", type=str)
-    parser.add_argument("--save_dir", default="./weights/wgisd", action="store", type=str)
-    parser.add_argument("--sam_ckpt", type=str, default=None)
+    parser.add_argument("--sam_ckpt", action="store", type=str)
+    parser.add_argument("--hf_pretrain_name", action="store", type=str)
+    parser.add_argument("--root_dir", action="store", type=str)
+    parser.add_argument("--save_dir", action="store", type=str)
     parser.add_argument("--wandb", action="store_true")
 
     args = parser.parse_args()

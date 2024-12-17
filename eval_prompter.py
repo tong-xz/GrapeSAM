@@ -60,9 +60,11 @@ def eval(vision_encoder, test_loader, vis, save_dir='./output'):
     all_gt_counts = []
     all_pred_counts = []
 
+    cnt = 0
     with torch.inference_mode(), torch.no_grad():
         for img, gt_points in test_loader:
             img, gt_points = img.cuda(), gt_points.cuda().sum()
+            
             features = vision_encoder(img)[0]
             
             pred = point_decoder(features)
@@ -70,18 +72,21 @@ def eval(vision_encoder, test_loader, vis, save_dir='./output'):
             err = abs(gt_points - pred_points_num)
             
             # 存储真实值和预测值
+
             all_gt_counts.append(float(gt_points.cpu()))
             all_pred_counts.append(pred_points_num)
-            
-            if vis:
-                img_pil = tensor_to_pil(img)
-                plot_results(img_pil, points=pred['pred_points'].squeeze(), dot_size=8, 
-                            save_path=save_dir, error=err)
-            
             total_mae += err
             total_squared_error += err**2
+            cnt += 1
+            
+            # if vis:
+            #     img_pil = tensor_to_pil(img)
+            #     plot_results(img_pil, points=pred['pred_points'].squeeze(), dot_size=8, 
+            #                 save_path=save_dir, error=err)
+            
+            
     
-    cnt = len(test_loader)
+    # cnt = len(test_loader)
     mae = float(total_mae / cnt)
     rmse = float((total_squared_error / cnt) ** 0.5)
 
@@ -90,7 +95,7 @@ def eval(vision_encoder, test_loader, vis, save_dir='./output'):
         r_squared = plot_r_square(all_gt_counts, all_pred_counts, 
                                 save_path=f'{save_dir}/r_square.png')
     
-    print(f"MAE: {mae:.4f}, RMSE: {rmse:.4f}, R²: {r_squared:.4f}")
+    print(f"MAE: {mae:.4f}, RMSE: {rmse:.4f}, R²: {r_squared:.4f}, cnt: {cnt}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test script arguments")
@@ -98,7 +103,7 @@ if __name__ == "__main__":
         "--root_dir", type=str, required=True, help="root directory of the dataset folders"
     )
     parser.add_argument("--ckp_path", type=str, required=True, help="checkpoint path")
-    parser.add_argument("--output_dir", type=str, default="./output", help="output directory")
+    parser.add_argument("--output_dir", type=str, default="./output2", help="output directory")
     parser.add_argument("--vis", action="store_true", help="whether output visualization images")
     
     args = parser.parse_args()

@@ -8,16 +8,6 @@ from typing import List, Optional, Dict, Tuple
 import torch.nn.functional as F
 import copy
 
-def build(cfg):
-    type = cfg['type']
-    if type == 'FeatureAggregator':
-        return FeatureAggregator(in_channels=cfg['in_channels'], out_channels=cfg['out_channels'], hidden_channels=cfg["hidden_channels"], select_layers=cfg['select_layers'])
-    elif type == 'FeatureSpliter':
-        return SimpleFPN(backbone_channel=cfg['backbone_channel'], in_channels=cfg['in_channels'], out_channels=cfg['out_channels'], num_outs=cfg['num_outs'])
-    else:
-        return NotImplementedError
-
-
 
 class LN2d(nn.Module):
     """A LayerNorm variant, popularized by Transformers, that performs
@@ -37,81 +27,53 @@ class LN2d(nn.Module):
         x = (x - u) / torch.sqrt(s + self.eps)
         x = self.weight[:, None, None] * x + self.bias[:, None, None]
         return x
-
-
-class PrompterAnchor(nn.Module):
-    def __init__(self):
+    
+    
+class prompter(nn.Module):
+    def __init__(self, cfg):
         super().__init__()
-        self.shared_image_embedding = None
+        if cfg['feature_aggregator'] is not None:
+            self.feature_aggregator = _build(cfg, 'feature_aggregator')
+        if cfg['feature_spliter'] is not None:
+            self.feature_spliter = _build(cfg, 'feature_spliter')
         
+    def forward(self, x):
+        '''
         
+        Parameters:
+        x: tuple of n hidden states with shape (1, 256, 64, 64)
         
-    def _set_grad_false(self, module_list=[]):
-        for module in module_list:
-            module.eval()
-            if isinstance(module, nn.Parameter):
-                module.requires_grad = False
-            for param in module.parameters():
-                param.requires_grad = False
-                
-                
-                
-    def get_image_wide_positional_embeddings(self, size):
-        """
-        Generate positional embeddings for a given input size.
-        Args:
-            size (tuple): Height and width of the input image.
         Returns:
-            torch.Tensor: Positional embeddings of shape (1, embed_dim, H, W)
-        """
-        h, w = size
-        grid_y, grid_x = torch.meshgrid(
-            torch.arange(h, dtype=torch.float32),
-            torch.arange(w, dtype=torch.float32),
-            indexing='ij'
-        )
-
-        # Normalize coordinates to [-1, 1]
-        grid_y = 2 * grid_y / (h - 1) - 1
-        grid_x = 2 * grid_x / (w - 1) - 1
-
-        # Stack and reshape
-        grid = torch.stack([grid_x, grid_y], dim=0)[None]  # Shape: (1, 2, H, W)
-        
-        return grid
-        
-    
-                
-    
-                
-
-class FPN(nn.Module):
-    def __init__(
-            self, 
-            feature_aggregator=None, 
-            feature_spliter=None, 
-            init_cfg =None
-        ):
-        super().__init__()
-        if feature_aggregator is not None:
-            self.feature_aggregator = FeatureAggregator(feature_aggregator)
-
-        if feature_spliter is not None:
-            self.feature_spliter = SimpleFPN(feature_spliter)
-
-
-    def forward(self, inputs):
+        x: multi-scale feature; tuple of 5 torch.Tensor with shape:
+            from 0-4: 
+                torch.Size([1, 256, 256, 256])
+                torch.Size([1, 256, 128, 128])
+                torch.Size([1, 256, 64, 64])
+                torch.Size([1, 256, 32, 32])
+                torch.Size([1, 256, 16, 16])
+        '''
         if hasattr(self, 'feature_aggregator'):
-            x = self.feature_aggregator(inputs)
-        else: 
-            x = inputs
-
-        if hasattr(self, 'feature_spliter'):
-            x = self.feature_spliter(x)
+            x = self.feature_aggregator(x) # from tuple to one torch.Tensor: (b, 256, 64, 64)
         else:
-            x = (x,)
+            x = x
+
+
+        # if hasattr(self, 'feature_spliter'):
+        #     x = self.feature_spliter(x)
+        # else:
+        #     x = (x,)
         return x
-    
+        
+def _build(cfg, type):
+    cfg = cfg[type]
+    if type == 'feature_aggregator':
+        return FeatureAggregator(in_channels=cfg['in_channels'], out_channels=cfg['out_channels'], 
+                                 hidden_channels=cfg["hidden_channels"], select_layers=cfg['select_layers'], device=cfg['device'])
+    elif type == 'feature_spliter':
+        return SimpleFPN(backbone_channel=cfg['backbone_channel'], in_channels=cfg['in_channels'], 
+                         out_channels=cfg['out_channels'], num_outs=cfg['num_outs'], device=cfg['device'])
+    else:
+        return NotImplementedError            
 
 class FeatureAggregator(nn.Module):
     in_channels_dict = {
@@ -126,12 +88,15 @@ class FeatureAggregator(nn.Module):
             hidden_channels=64,
             out_channels=256,
             select_layers=range(1, 12, 2),
-            init_cfg=None,
+            device='cuda'
     ):
-        #TODO whether remove init_cfg?
+
         super().__init__()
+
         assert isinstance(in_channels, str)
+        
         model_arch = 'base' if 'base' in in_channels else 'large' if 'large' in in_channels else 'huge'
+        
         self.in_channels = self.in_channels_dict[model_arch]
         self.select_layers = select_layers
 
@@ -166,10 +131,15 @@ class FeatureAggregator(nn.Module):
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(out_channels, out_channels, 3, padding=1),
-        )
+        ).to(device)
+        
+        # move to device
+        self.downconvs.to(device)
+        self.hidden_convs.to(device)
 
 
     def forward(self, inputs):
+        
         assert len(inputs) == len(self.in_channels)
         inputs = [einops.rearrange(x, 'b h w c -> b c h w') for x in inputs]
 
@@ -177,13 +147,14 @@ class FeatureAggregator(nn.Module):
         for idx, i_layer in enumerate(self.select_layers):
             features.append(self.downconvs[idx](inputs[i_layer]))
 
+        
         x = None
         for hidden_state, hidden_conv in zip(features, self.hidden_convs):
             if x is not None:
                  hidden_state = x + hidden_state
             residual = hidden_conv(hidden_state)
             x = hidden_state + residual
-
+        
         x = self.fusion_conv(x)
         return x
 
@@ -198,7 +169,8 @@ class SimpleFPN(nn.Module):
             conv_cfg: Optional[Dict] = None,
             norm_cfg: Optional[Dict] = None,
             act_cfg: Optional[Dict] = None,
-            init_cfg: Optional[Dict] = None
+            init_cfg: Optional[Dict] = None,
+            device='cuda'
                  ):
         super().__init__()
 
@@ -212,32 +184,34 @@ class SimpleFPN(nn.Module):
         self.fpn1 = nn.Sequential(
             nn.ConvTranspose2d(self.backbone_channel,
                                self.backbone_channel // 2, 2, 2),
-            LN2d( self.backbone_channel // 2, eps=1e-5),
+            LN2d(self.backbone_channel // 2, eps=1e-5),
             nn.GELU(),
             nn.ConvTranspose2d(self.backbone_channel // 2,
-                               self.backbone_channel // 4, 2, 2))
+                               self.backbone_channel // 4, 2, 2)
+        ).to(device)
+
         self.fpn2 = nn.Sequential(
             nn.ConvTranspose2d(self.backbone_channel,
-                               self.backbone_channel // 2, 2, 2))
-        self.fpn3 = nn.Sequential(nn.Identity())
-        self.fpn4 = nn.Sequential(nn.MaxPool2d(kernel_size=2, stride=2))
+                               self.backbone_channel // 2, 2, 2)
+        ).to(device)
+
+        self.fpn3 = nn.Sequential(nn.Identity()).to(device)
+        self.fpn4 = nn.Sequential(nn.MaxPool2d(kernel_size=2, stride=2)).to(device)
 
         self.lateral_convs = nn.ModuleList()
         self.fpn_convs = nn.ModuleList()
 
         for i in range(self.num_ins):
-            #TODO validate structure
             l_conv = nn.Sequential(
                 nn.Conv2d(
                     in_channels=in_channels[i],
                     out_channels=self.out_channels,
-                    kernel_size=1,  # 1x1 卷积
+                    kernel_size=1,  
                     stride=1,
                     bias=False
                 ),
                 LN2d(normalized_shape=256)  # 输出通道是256
-            )
-
+            ).to(device)
 
             fpn_conv = nn.Sequential(
                 nn.Conv2d(
@@ -249,7 +223,7 @@ class SimpleFPN(nn.Module):
                     bias=False
                 ),
                 LN2d(normalized_shape=256)  # 使用channel数作为参数
-            )
+            ).to(device)
             
 
             self.lateral_convs.append(l_conv)
@@ -286,6 +260,8 @@ class SimpleFPN(nn.Module):
             for i in range(self.num_outs - self.num_ins):
                 outs.append(F.max_pool2d(outs[-1], 1, stride=2))
         return tuple(outs)
+
+
 
 from .utils import SinePositionalEncoding
 # TODO how to convert base roi functions

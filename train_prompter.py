@@ -7,7 +7,10 @@ import time
 import os
 import wandb
 import glob
-
+from model.prompter import prompter
+import yaml
+import numpy as np
+import random
 '''
 new train method based on hf weights and transformer functions
 '''
@@ -23,11 +26,13 @@ def set_seed(seed):
     torch.backends.cudnn.benchmark = False
     
     # Also need to set random seeds for numpy and random
-    import numpy as np
-    import random
     np.random.seed(seed)
     random.seed(seed)
 
+def load_config(config_path):
+    with open(config_path, 'r') as file:
+        config = yaml.safe_load(file)
+    return config
 
 def train(config):
     # build dataloader
@@ -36,7 +41,7 @@ def train(config):
     ROOT_DIR = config["root_dir"]
     USE_WANDB = config["wandb"]
     SAVE_DIR = config["save_dir"]
-
+    CONFIG_PATH = config["config"]
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     loader_dict = build_loader(root_dir=ROOT_DIR, batch_size=BATCH_SIZE)
@@ -46,24 +51,10 @@ def train(config):
         loader_dict["test"],
     )
 
-    cfg = {
-        'type': 'GSAMVisionEncoder',
-        'hf_pretrain_name': "pretrain/sam-vit-huge/",
-        'init_cfg': {'checkpoint': '/home/xz/Dev/GrapeSAM/pretrain/sam-vit-huge/pytorch_model.bin'},
-        'extra_cfg': None,
-        'device': device
-    }
-    vision_encoder = build_gsam(cfg).to(device).eval()
-
-    cfg1 = {
-        'type': 'GSAMMaskDecoder',
-        'hf_pretrain_name': "pretrain/sam-vit-huge/",
-        'init_cfg': {'checkpoint': '/home/xz/Dev/GrapeSAM/pretrain/sam-vit-huge/pytorch_model.bin'},
-        'extra_cfg': None,
-        'device': device
-    }
-    mask_decoder = build_gsam(cfg1).mask_decoder
-
+    cfg = load_config(CONFIG_PATH)
+    
+    vision_encoder = build_gsam(cfg['vision_encoder']).to(device).eval()
+    mask_decoder = build_gsam(cfg['mask_decoder']).mask_decoder
     point_decoder = PointDecoder(mask_decoder).to(device)
 
     n_parameters = sum(p.numel() for p in point_decoder.parameters() if p.requires_grad)
@@ -81,13 +72,14 @@ def train(config):
         run = wandb.init(
             # Set the project where this run will be logged
             project="Vivid-exp",
-            name="dynamic heatmap",
+            name="just feature aggregation",
             tags=["init"],
         )
 
 
      # start training
     for epoch in range(EPOCH_NUM):
+        start_time = time.time()
         point_decoder.train()
         running_loss = 0.0
 
@@ -97,8 +89,14 @@ def train(config):
 
             # 冻结encoder参数
             with torch.no_grad():
-                features = vision_encoder(imgs)[0]  # torch.Size([b, 256, 64, 64])
+                vision_outputs = vision_encoder(imgs, output_hidden_states=True)  
+                img_embeddings = vision_outputs[0] # torch.Size([b, 256, 64, 64])
+                img_hidden_states = vision_outputs[1]
+                
+                del vision_outputs, img_embeddings
 
+            features = prompter(cfg['prompter'])(img_hidden_states)
+            
             # 训练decoder
             optimizer.zero_grad()
             pred_heatmaps = point_decoder(features)["pred_heatmaps"]  # (b, 1, 256, 256)
@@ -123,8 +121,9 @@ def train(config):
                 loss = mseloss(pred_heatmaps, gt_heatmaps)
                 val_loss += loss.item()
         
+        end_time = time.time()
         print(
-            f"Epoch [{epoch + 1}/{EPOCH_NUM}], Train Loss: {running_loss / len(train_loader)}, Val Loss: {val_loss / len(val_loader)}"
+            f"Epoch [{epoch + 1}/{EPOCH_NUM}], Train Loss: {running_loss / len(train_loader)}, Val Loss: {val_loss / len(val_loader)}, Time: {(end_time - start_time)/60:.2f}min"
         )
 
         if USE_WANDB:
@@ -186,6 +185,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--epoch_num", default=100, action="store", type=int, required=True
     )
+    parser.add_argument("--config", action="store", type=str, default="config/prompter_huge.yaml")
     parser.add_argument("--root_dir", action="store", type=str)
     parser.add_argument("--save_dir", action="store", type=str)
     parser.add_argument("--wandb", action="store_true")

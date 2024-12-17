@@ -1,0 +1,34 @@
+
+vision_encoder:
+  type: GSAMVisionEncoder
+  hf_pretrain_name: pretrain/sam-vit-huge/
+  init_cfg:
+    checkpoint: /home/xz/Dev/GrapeSAM/pretrain/sam-vit-huge/pytorch_model.bin
+  extra_cfg: null
+  device: cuda
+
+mask_decoder:
+  type: GSAMMaskDecoder
+  hf_pretrain_name: pretrain/sam-vit-huge/
+  init_cfg:
+    checkpoint: /home/xz/Dev/GrapeSAM/pretrain/sam-vit-huge/pytorch_model.bin
+  extra_cfg: null
+  device: cuda
+
+
+prompter:
+  feature_aggregator:
+      in_channels: huge
+      hidden_channels: 13
+      out_channels: 256
+      select_layers: [1, 3, 5, 7, 9, 11]
+      device: cuda
+  feature_spliter:
+      backbone_channel: 256
+      in_channels: [64, 128, 256, 256]
+      out_channels: 256
+      num_outs: 5
+      device: cuda
+      norm_cfg:
+          type: LN2d
+          requires_grad: true

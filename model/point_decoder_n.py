@@ -124,23 +124,26 @@ class PointDecoder(nn.Module):
         sparse_embeddings = output_tokens.unsqueeze(0).expand(
             image_embeddings.size(0), -1, -1
         )
+        
         image_pe = self.get_dense_pe()
-        src = image_embeddings
-        pos_src = image_pe
+        src, pos_src = image_embeddings, image_pe
         b, c, h, w = src.shape
         hs, src = self.transformer(src, pos_src, sparse_embeddings)
 
         src = src.transpose(1, 2).view(b, c, h, w)
         mask_tokens_out = hs[:, 0, :]
+        
         upscaled_embedding = self.output_upscaling(src)
         hyper_in = self.output_hypernetworks_mlp(mask_tokens_out).unsqueeze(1)
         b, c, h, w = upscaled_embedding.shape
+
         pred_heatmaps = (hyper_in @ upscaled_embedding.view(b, c, h * w)).view(
             b, -1, h, w
         )
         
         if self.training:
             return {"pred_heatmaps": pred_heatmaps}
+
 
         if masks is not None:
             pred_heatmaps *= masks

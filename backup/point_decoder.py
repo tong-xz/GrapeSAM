@@ -118,7 +118,7 @@ class PointDecoder(nn.Module):
         #TODO use self-adpatble threshold instead of manually set threshold
         #TODO maybe removre nms post-processing
         with torch.no_grad():
-            from .ops.ops import _nms
+            from ..model.ops.ops import _nms
 
             pred_heatmaps_nms = _nms(
                 pred_heatmaps.detach().clone(), self.nms_kernel_size
