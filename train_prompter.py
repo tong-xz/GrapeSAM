@@ -41,7 +41,13 @@ def train(config):
     ROOT_DIR = config["root_dir"]
     USE_WANDB = config["wandb"]
     SAVE_DIR = config["save_dir"]
+<<<<<<< HEAD
     CONFIG_PATH = config["config"]
+=======
+    SAM_CKPT = config["sam_ckpt"]
+    HF_PRETRAIN_NAME = config["hf_pretrain_name"]
+
+>>>>>>> 949feeef1a453ceb34b6d9bf0e22af026916e2aa
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     loader_dict = build_loader(root_dir=ROOT_DIR, batch_size=BATCH_SIZE)
@@ -51,10 +57,32 @@ def train(config):
         loader_dict["test"],
     )
 
+<<<<<<< HEAD
     cfg = load_config(CONFIG_PATH)
     
     vision_encoder = build_gsam(cfg['vision_encoder']).to(device).eval()
     mask_decoder = build_gsam(cfg['mask_decoder']).mask_decoder
+=======
+    cfg = {
+        'type': 'GSAMVisionEncoder',
+        'hf_pretrain_name': HF_PRETRAIN_NAME,
+        'init_cfg': {'checkpoint': SAM_CKPT},
+        'extra_cfg': None,
+        'device': device
+    }
+    vision_encoder = build_gsam(cfg).to(device).eval()
+
+    cfg1 = {
+        'type': 'GSAMMaskDecoder',
+        'hf_pretrain_name': HF_PRETRAIN_NAME,
+        'init_cfg': {'checkpoint': SAM_CKPT},
+        'extra_cfg': None,
+        'device': device
+    }
+    
+    mask_decoder = build_gsam(cfg1).mask_decoder
+
+>>>>>>> 949feeef1a453ceb34b6d9bf0e22af026916e2aa
     point_decoder = PointDecoder(mask_decoder).to(device)
 
     n_parameters = sum(p.numel() for p in point_decoder.parameters() if p.requires_grad)
@@ -185,7 +213,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--epoch_num", default=100, action="store", type=int, required=True
     )
+<<<<<<< HEAD
     parser.add_argument("--config", action="store", type=str, default="config/prompter_huge.yaml")
+=======
+    parser.add_argument("--sam_ckpt", action="store", type=str)
+    parser.add_argument("--hf_pretrain_name", action="store", type=str)
+>>>>>>> 949feeef1a453ceb34b6d9bf0e22af026916e2aa
     parser.add_argument("--root_dir", action="store", type=str)
     parser.add_argument("--save_dir", action="store", type=str)
     parser.add_argument("--wandb", action="store_true")
