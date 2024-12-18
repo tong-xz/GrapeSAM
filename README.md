@@ -8,7 +8,7 @@ https://blog.csdn.net/qq_61676281/article/details/131845706
 
 ![alt text](assets/image.png)
 
-# Config
+## Checkpoint Download
 
 How to download huggingface model weights?
 ```bash
@@ -19,10 +19,8 @@ cd ..
 
 ## Train
 ```python
-python3 train.py --batch_size 4 --epoch_num 5 --wandb
+python train.py --batch_size 4 --epoch_num 500 --sam_ckpt ./weights/sam_vit_h_4b8939.pth --wandb
 ```
-
-## Test
 
 ## Eval
 

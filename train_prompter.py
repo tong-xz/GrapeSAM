@@ -78,7 +78,7 @@ def train(config):
         run = wandb.init(
             # Set the project where this run will be logged
             project="Vivid-exp",
-            name="just feature aggregation",
+            name="fpn with orginal mask decoder",
             tags=["init"],
         )
 
@@ -102,8 +102,7 @@ def train(config):
                 del vision_outputs, img_embeddings
 
             features = prompter(cfg['prompter'])(img_hidden_states)
-            
-            # 训练decoder
+
             optimizer.zero_grad()
             pred_heatmaps = point_decoder(features)["pred_heatmaps"]  # (b, 1, 256, 256)
 
@@ -120,8 +119,14 @@ def train(config):
             for imgs, heatmaps in val_loader:
                 imgs = imgs.to(device)
                 gt_heatmaps = heatmaps.to(device)
-
-                features = vision_encoder(imgs)[0]
+                
+                vision_outputs = vision_encoder(imgs, output_hidden_states=True)  
+                img_embeddings = vision_outputs[0] # torch.Size([b, 256, 64, 64])
+                img_hidden_states = vision_outputs[1]
+                
+                del vision_outputs, img_embeddings
+                
+                features = prompter(cfg['prompter'])(img_hidden_states)
                 pred_heatmaps = point_decoder(features)["pred_heatmaps"]
 
                 loss = mseloss(pred_heatmaps, gt_heatmaps)
@@ -154,7 +159,11 @@ def train(config):
     # save intermediate checkpoint every 10 epochs
     if (epoch + 1) % 10 == 0:
         tmp_ckp_path = os.path.join(tmp_save_dir, f'point_decoder_epoch_{epoch+1}.pth')
-        torch.save(point_decoder.state_dict(), tmp_ckp_path)
+        torch.save({
+            'point_decoder': point_decoder.state_dict(),
+            'prompter': prompter.state_dict()
+        }, tmp_ckp_path)
+        
         print(f"Checkpoint from epoch {epoch+1} saved at {tmp_ckp_path}")
         
         # keep only latest 3 checkpoints
@@ -193,7 +202,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument("--config", action="store", type=str, default="config/prompter_huge.yaml")
-
     parser.add_argument("--sam_ckpt", action="store", type=str)
     parser.add_argument("--hf_pretrain_name", action="store", type=str)
     parser.add_argument("--root_dir", action="store", type=str)

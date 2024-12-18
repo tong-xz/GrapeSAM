@@ -6,7 +6,9 @@ from segment_anything.modeling.mask_decoder import MLP
 from segment_anything.modeling.common import LayerNorm2d
 from segment_anything.modeling.transformer import TwoWayTransformer
 
-
+'''
+huggingface sam version
+'''
 class ROIHeadMLP(nn.Module):
     def __init__(self):
         super(ROIHeadMLP, self).__init__()

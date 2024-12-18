@@ -28,7 +28,7 @@ class LN2d(nn.Module):
         x = self.weight[:, None, None] * x + self.bias[:, None, None]
         return x
     
-    
+
 class prompter(nn.Module):
     def __init__(self, cfg):
         super().__init__()
@@ -37,6 +37,8 @@ class prompter(nn.Module):
         if cfg['feature_spliter'] is not None:
             self.feature_spliter = _build(cfg, 'feature_spliter')
         
+        self.heatmap_decoder = HeatmapDecoder()
+    
     def forward(self, x):
         '''
         
@@ -58,10 +60,12 @@ class prompter(nn.Module):
             x = x
 
 
-        # if hasattr(self, 'feature_spliter'):
-        #     x = self.feature_spliter(x)
-        # else:
-        #     x = (x,)
+        if hasattr(self, 'feature_spliter'):
+            x = self.feature_spliter(x)
+        else:
+            x = (x,)
+            
+        x = self.heatmap_decoder(x)
         return x
         
 def _build(cfg, type):
@@ -73,7 +77,46 @@ def _build(cfg, type):
         return SimpleFPN(backbone_channel=cfg['backbone_channel'], in_channels=cfg['in_channels'], 
                          out_channels=cfg['out_channels'], num_outs=cfg['num_outs'], device=cfg['device'])
     else:
-        return NotImplementedError            
+        return NotImplementedError      
+    
+    
+class HeatmapDecoder(nn.Module):
+    def __init__(self, in_channels=256, target_size=(64, 64), device='cuda'):
+        super().__init__()
+        self.target_size = target_size
+
+        self.decoder = nn.Sequential(
+            nn.Conv2d(in_channels, 128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 1, kernel_size=1)  # 输出单通道heatmap
+        ).to(device)
+
+    def forward(self, fpn_features):
+        """
+        Args:
+            fpn_features: List of feature maps from FPN.
+                          Each feature map is of shape (B, C, H_i, W_i).
+
+        Returns:
+            heatmap: (B, 1, target_size[0], target_size[1])
+        """
+        # Step 1: 上采样/下采样所有FPN输出到目标分辨率 (64,64)
+        upsampled_features = [
+            F.interpolate(feat, size=self.target_size, mode='bilinear', align_corners=False)
+            for feat in fpn_features
+        ] # list of 5 torch.Tensor with shape: (b, 256, 64, 64)
+        
+        # Step 2: 融合特征（逐元素相加）
+        combined_features = torch.sum(torch.stack(upsampled_features), dim=0)  # (B, C, H, W)
+        
+         
+        del upsampled_features
+        del fpn_features
+        
+        return combined_features
+    
 
 class FeatureAggregator(nn.Module):
     in_channels_dict = {
@@ -260,6 +303,11 @@ class SimpleFPN(nn.Module):
             for i in range(self.num_outs - self.num_ins):
                 outs.append(F.max_pool2d(outs[-1], 1, stride=2))
         return tuple(outs)
+
+
+
+
+
 
 
 
