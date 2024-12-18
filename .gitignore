@@ -1,4 +1,5 @@
 data/
+!model/mask2former/data
 *.pyc
 __pycache__/
 model/__pycache__/
@@ -10,3 +11,36 @@ pretrain/
 output/
 index.md
 .vscode/
+
+# compilation and distribution
+__pycache__
+_ext
+*.pyc
+*.pyd
+*.so
+*.dll
+*.egg-info/
+build/
+dist/
+wheels/
+
+# pytorch/python/numpy formats
+*.pth
+*.pkl
+*.npy
+*.ts
+model_ts*.txt
+
+*.png
+*.json
+*.diff
+*.jpg
+
+output
+instant_test_output
+inference_test_output
+
+# project dirs
+/detectron2/model_zoo/configs
+/models
+/snippet
