@@ -2,43 +2,13 @@ from predictor import Trainer, setup_cfg
 import torch
 
 cfg = setup_cfg(
-    "/data/Hypothesis/theorem/grape/Dream/config/coco/instance-segmentation/maskformer2_R50_bs16_50ep.yaml",
+    "config/coco/instance-segmentation/maskformer2_R50_bs16_50ep.yaml",
     ["MODEL.WEIGHTS", "output/model_0214999.pth"],
 )
 print(cfg)
 # model = Mask2FormerRunner(cfg)
 model = Trainer.build_model(cfg)
 
-
-# # Simulate a batched input with two images
-# batched_inputs = [
-#     {
-#         "image": torch.randn(3, 256, 256),  # Random tensor simulating a (C, H, W) image
-#         "instances": {
-#             "gt_masks": torch.randint(
-#                 0, 2, (5, 128, 128), dtype=torch.uint8
-#             ),  # Simulating 5 binary masks
-#             "gt_classes": torch.tensor(
-#                 [1, 0, 2, 3, 4], dtype=torch.int64
-#             ),  # Simulating 5 class labels
-#         },
-#         "height": 256,
-#         "width": 256,
-#     },
-#     {
-#         "image": torch.randn(3, 300, 300),  # Another image
-#         "instances": {
-#             "gt_masks": torch.randint(
-#                 0, 2, (3, 150, 150), dtype=torch.uint8
-#             ),  # Simulating 3 binary masks
-#             "gt_classes": torch.tensor(
-#                 [0, 1, 2], dtype=torch.int64
-#             ),  # Simulating 3 class labels
-#         },
-#         "height": 300,
-#         "width": 300,
-#     },
-# ]
 import torch
 import numpy as np
 from detectron2.structures import Instances, Boxes
