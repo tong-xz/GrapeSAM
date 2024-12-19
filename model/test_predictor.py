@@ -2,8 +2,8 @@ from predictor import Trainer, setup_cfg
 import torch
 
 cfg = setup_cfg(
-    "config/coco/instance-segmentation/maskformer2_R50_bs16_50ep.yaml",
-    ["MODEL.WEIGHTS", "output/model_0214999.pth"],
+    "../config/coco/instance-segmentation/maskformer2_R50_bs16_50ep.yaml",
+    ["MODEL.WEIGHTS", "../weights/mask2former/model_0214999.pth"],
 )
 print(cfg)
 # model = Mask2FormerRunner(cfg)

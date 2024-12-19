@@ -7,7 +7,7 @@ from segment_anything.modeling.common import LayerNorm2d
 from segment_anything.modeling.transformer import TwoWayTransformer
 
 '''
-huggingface sam version
+huggingface sam version pointdecoder
 '''
 class ROIHeadMLP(nn.Module):
     def __init__(self):

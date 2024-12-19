@@ -59,7 +59,6 @@ class prompter(nn.Module):
         else:
             x = x
 
-
         if hasattr(self, 'feature_spliter'):
             x = self.feature_spliter(x)
         else:
@@ -303,9 +302,6 @@ class SimpleFPN(nn.Module):
             for i in range(self.num_outs - self.num_ins):
                 outs.append(F.max_pool2d(outs[-1], 1, stride=2))
         return tuple(outs)
-
-
-
 
 
 
