@@ -29,10 +29,6 @@ def set_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
-def load_config(config_path):
-    with open(config_path, 'r') as file:
-        config = yaml.safe_load(file)
-    return config
 
 def train(config):
     # build dataloader

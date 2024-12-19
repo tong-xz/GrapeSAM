@@ -5,7 +5,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from scipy import stats
 from model import build_loader, build_gsam
-from model.point_decoder_n import PointDecoder
+from model.point_decoder import PointDecoder
 from model.ops.ops import plot_results
 import os
 import yaml
@@ -83,6 +83,7 @@ def eval(args):
     
     with torch.inference_mode(), torch.no_grad():
         for img, gt_points in test_loader:
+            breakpoint()
             img, gt_points = img.cuda(), gt_points.cuda().sum()
             
             features = vision_encoder(img)[0]
