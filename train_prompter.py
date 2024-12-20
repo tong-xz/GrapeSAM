@@ -1,7 +1,7 @@
 import argparse
 from model import build_loader, build_gsam
 import torch
-from model.point_decoder_n import PointDecoder
+from model.point_decoder import PointDecoder
 import torch.nn as nn
 import time
 import os
@@ -11,6 +11,8 @@ from model.prompter import prompter
 import yaml
 import numpy as np
 import random
+from model.utils import load_config
+
 '''
 new train method based on hf weights and transformer functions
 '''

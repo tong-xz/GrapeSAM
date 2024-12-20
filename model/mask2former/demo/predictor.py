@@ -36,7 +36,7 @@ class VisualizationDemo(object):
         else:
             self.predictor = DefaultPredictor(cfg)
 
-    def run_on_image(self, image):
+    def run_on_image(self, image, score_threshold=0.5):
         """
         Args:
             image (np.ndarray): an image of shape (H, W, C) (in BGR order).
@@ -50,7 +50,6 @@ class VisualizationDemo(object):
         instances = predictions['instances']
         
         # Filter instances based on score threshold
-        score_threshold = 0.5
         condition = instances.scores > score_threshold
         condition = condition.to('cpu')
 

@@ -15,6 +15,13 @@ mask_decoder:
   extra_cfg: null
   device: cuda
 
+mask_decoder:
+  type: GSAMPromptEncoder
+  hf_pretrain_name: pretrain/sam-vit-huge/
+  init_cfg:
+    checkpoint: /home/xz/Dev/GrapeSAM/pretrain/sam-vit-huge/pytorch_model.bin
+  extra_cfg: null
+  device: cuda
 
 prompter:
   feature_aggregator:

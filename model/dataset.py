@@ -404,30 +404,3 @@ def build_loader(root_dir, batch_size, phase='train'):
     )
     return {"train": train_loader, "val": val_loader, "test": test_loader}
 
-
-
-if __name__ == "__main__":
-    root = "/home/xz/Dev/Dream/data/wgisd/"
-    # train_files, val_files, test_files = _split_phases(root)
-    # v = VividDataset(
-    #     root,
-    #     file_list=train_files,
-    #     mode="test",
-    # )
-    # print(v[0])
-
-    # for i, data in enumerate(v):
-    #     img, map = data[0], data[1]
-        
-    #     visualize_img_and_heatmap(img, map)
-        
-    #     print(i)
-    
-    # # img = restore_image_from_quadrants(img)
-    # # visualize_restored_image(img)
-    # visualize_img_and_heatmap(img, map)
-    # # visualize_quadrants(img)
-
-    loader_dict = build_loader(root, 4, True)
-    # for imgs, heatmaps in loader_dict['train']:
-    #     print(imgs.shape, heatmaps.shape)

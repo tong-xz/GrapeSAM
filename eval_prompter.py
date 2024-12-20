@@ -83,7 +83,7 @@ def eval(args):
     
     with torch.inference_mode(), torch.no_grad():
         for img, gt_points in test_loader:
-            breakpoint()
+
             img, gt_points = img.cuda(), gt_points.cuda().sum()
             
             features = vision_encoder(img)[0]
@@ -99,10 +99,10 @@ def eval(args):
             total_squared_error += err**2
             cnt += 1
             
-            # if vis:
-            #     img_pil = tensor_to_pil(img)
-            #     plot_results(img_pil, points=pred['pred_points'].squeeze(), dot_size=8, 
-            #                 save_path=save_dir, error=err)
+            if args.vis:
+                img_pil = tensor_to_pil(img)
+                plot_results(img_pil, points=pred['pred_points'].squeeze().cpu(), dot_size=8, 
+                            save_path=args.output_dir, error=err)
             
             
     mae = float(total_mae / cnt)

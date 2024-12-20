@@ -14,7 +14,6 @@ from pathlib import Path
 
 
 
-
 def gaussian_radius(det_size, min_overlap=0.7):
     height, width = det_size
 
@@ -38,7 +37,6 @@ def gaussian_radius(det_size, min_overlap=0.7):
     return min(r1, r2, r3)
 
 
-
 def _nms(heat, kernel=3):
     pad = (kernel - 1) // 2
 
@@ -59,21 +57,28 @@ def plot_results(image, masks: torch.Tensor = None, points: torch.Tensor = None,
                 bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
     
     if masks is not None:
-        masks = F.interpolate(masks, size=np.array(image).shape[:2])
+        # if masks.shape[0] == 1:
+        #     import pdb; pdb.set_trace()
+            
+        masks = F.interpolate(masks.unsqueeze(0), size=np.array(image).shape[:2], mode='bilinear').squeeze(0)
+            
         areas = (masks > 0.5).float().squeeze().sum(dim=(-1, -2))
         indices = torch.argsort(areas)
-        masks = masks[indices]
-        if points is not None:
-            points = points[indices]
-        if bboxes is not None:
-            bboxes = bboxes[indices]
+        masks = masks[indices] 
+        
+        if indices.shape == (): # deal with the case when there is only one mask
+            masks = masks.unsqueeze(0)
+            
         for i in range(len(masks)):
-            m = masks[i].squeeze().cpu().numpy()
+            m = masks[i].squeeze(0).cpu().numpy()
+
             img = np.ones((*m.shape, 3))
             color_mask = np.random.random((1, 3)).tolist()[0]
             for i in range(3):
+
                 img[:, :, i] = color_mask[i] * m
                 plt.imshow(np.dstack((img, m * alpha)))
+    
     
     if bboxes is not None:
         for i in range(len(bboxes)):
@@ -82,9 +87,8 @@ def plot_results(image, masks: torch.Tensor = None, points: torch.Tensor = None,
                 plt.Rectangle((x1, y1), x2 - x1, y2 - y1, edgecolor='red', lw=1, facecolor=(0, 0, 0, 0), alpha=alpha))
             if show_num and points is None:
                 plt.text(x1, y1, str(i), )
-    
+
     if points is not None:
-        points = points.cpu().numpy()
         # 检查points的维度并适当reshape
         if len(points.shape) == 1:
             points = points.reshape(-1, 2)
