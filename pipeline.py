@@ -122,7 +122,7 @@ if __name__ == "__main__":
     point_config = load_config(POINT_CONFIG)
     vision_encoder = build_gsam(point_config['vision_encoder']).to(DEVICE)
     mask_decoder = build_gsam(point_config['mask_decoder']).mask_decoder.to(DEVICE)
-    prompt_encoder = build_gsam(point_config['prompt_encoder']).to(DEVICE)
+    # prompt_encoder = build_gsam(point_config['prompt_encoder']).to(DEVICE)
     test_loader = build_loader(ROOT_DIR, batch_size=1)['test']
     
     point_decoder = PointDecoder(mask_decoder).to(DEVICE)
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     point_decoder.eval()
     point_decoder.max_points = 2048
     point_decoder.nms_kernel_size = 3
-    point_decoder.point_threshold = 0.10 # exp 0.28
+    point_decoder.point_threshold = 0.15 # exp 0.28
     
     for img, _ in test_loader:
         start_time = time.time()
