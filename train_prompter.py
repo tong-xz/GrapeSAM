@@ -41,8 +41,8 @@ def train(config):
     SAVE_DIR = config["save_dir"]
     CONFIG_PATH = config["config"]
 
-    SAM_CKPT = config["sam_ckpt"]
-    HF_PRETRAIN_NAME = config["hf_pretrain_name"]
+    # SAM_CKPT = config["sam_ckpt"]
+    # HF_PRETRAIN_NAME = config["hf_pretrain_name"]
 
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -200,8 +200,8 @@ if __name__ == "__main__":
     )
 
     parser.add_argument("--config", action="store", type=str, default="config/prompter_huge.yaml")
-    parser.add_argument("--sam_ckpt", action="store", type=str)
-    parser.add_argument("--hf_pretrain_name", action="store", type=str)
+    # parser.add_argument("--sam_ckpt", action="store", type=str)
+    # parser.add_argument("--hf_pretrain_name", action="store", type=str)
     parser.add_argument("--root_dir", action="store", type=str)
     parser.add_argument("--save_dir", action="store", type=str)
     parser.add_argument("--wandb", action="store_true")

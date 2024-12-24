@@ -44,3 +44,4 @@ inference_test_output
 /detectron2/model_zoo/configs
 /models
 /snippet
+config/prompter_aruix.yaml
