@@ -11,7 +11,7 @@ pretrain/
 output/
 index.md
 .vscode/
-
+lightning_logs/
 # compilation and distribution
 __pycache__
 _ext

@@ -1,7 +1,6 @@
 import os
 
-os.Environ["CUDA_VISIABLE_DEVICES"] = "0,1"
-print(f"Using GPU: {os.Environ['CUDA_VISIABLE_DEVICES']}")
+print(f"Using GPU: {os.environ['CUDA_VISIABLE_DEVICES']}")
 import argparse
 import torch
 import torch.nn as nn
@@ -48,7 +47,7 @@ class TrainerLightning(pl.LightningModule):
         print("---Decoder Parameters: %.2fM" % (n_parameters / 1e6,))
 
     def forward(self, features):
-        return self.point_decoder(features)["pred_heatmaps"]
+        return self.point_decoder(features)
 
     def set_seed(self, seed):
         torch.manual_seed(seed)
@@ -96,7 +95,7 @@ class TrainerLightning(pl.LightningModule):
             del vision_outputs, img_embeddings
 
         features = prompter(self.cfg["prompter"])(img_hidden_states)
-        pred_heatmaps = self(features)
+        pred_heatmaps = self(features)["pred_heatmaps"]
 
         loss = self.mseloss(pred_heatmaps, gt_heatmaps)
         self.log("train_loss", loss, on_epoch=True, prog_bar=True)
@@ -119,19 +118,30 @@ class TrainerLightning(pl.LightningModule):
 
         mae = torch.abs(gt_points - pred_points_num).mean()
         rmse = torch.sqrt(torch.mean((gt_points - pred_points_num) ** 2))
-        
-        self.log("val_mae", mae, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val_rmse", rmse, on_step=False, on_epoch=True, prog_bar=True)
-        
-        return {"mae": mae, "rmse": rmse, "gt_points": gt_points, "pred_points_num": pred_points_num}
 
-    def on_validation_epoch_end(self):
-        avg_mae = torch.stack([x["mae"] for x in self.trainer.callback_metrics]).mean()
-        avg_rmse = torch.stack([x["rmse"] for x in self.trainer.callback_metrics]).mean()
-        
-        self.log("avg_val_mae", avg_mae, prog_bar=True)
-        self.log("avg_val_rmse", avg_rmse, prog_bar=True)
+        self.log(
+            "val_mae",
+            mae,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self.log(
+            "val_rmse",
+            rmse,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            sync_dist=True,
+        )
 
+        return {
+            "mae": mae,
+            "rmse": rmse,
+            "gt_points": gt_points,
+            "pred_points_num": pred_points_num,
+        }
 
     def on_epoch_end(self):
         if self.USE_WANDB:
@@ -167,8 +177,8 @@ def main(config):
     # Create a PyTorch Lightning Trainer
     checkpoint_callback = ModelCheckpoint(
         dirpath=os.path.join(config["save_dir"], "checkpoints"),
-        filename="point_decoder-{epoch:02d}-{val_loss:.2f}",
-        monitor="val_loss",
+        filename="point_decoder-{epoch:02d}-{val_mae:.2f}",
+        monitor="val_mae",
         mode="min",
         save_top_k=3,
     )
@@ -179,11 +189,7 @@ def main(config):
         devices="auto",  # Automatically use available GPUs or CPU
         callbacks=[checkpoint_callback],
         logger=wandb if config["wandb"] else None,
-        strategy=(
-            DDPStrategy(find_unused_parameters=True)
-            if torch.cuda.device_count() > 1
-            else None
-        ),
+        strategy=(DDPStrategy(find_unused_parameters=True)),
     )
 
     # Train the model
