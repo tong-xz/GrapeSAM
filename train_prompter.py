@@ -13,20 +13,21 @@ import numpy as np
 import random
 from model.utils import load_config
 
-'''
+"""
 new train method based on hf weights and transformer functions
-'''
+"""
+
 
 def set_seed(seed):
     # For reproducibility across different runs
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    
+
     # For reproducibility on the same machine
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    
+
     # Also need to set random seeds for numpy and random
     np.random.seed(seed)
     random.seed(seed)
@@ -44,7 +45,6 @@ def train(config):
     # SAM_CKPT = config["sam_ckpt"]
     # HF_PRETRAIN_NAME = config["hf_pretrain_name"]
 
-
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     loader_dict = build_loader(root_dir=ROOT_DIR, batch_size=BATCH_SIZE)
@@ -55,9 +55,9 @@ def train(config):
     )
 
     cfg = load_config(CONFIG_PATH)
-    
-    vision_encoder = build_gsam(cfg['vision_encoder']).to(device).eval()
-    mask_decoder = build_gsam(cfg['mask_decoder']).mask_decoder
+
+    vision_encoder = build_gsam(cfg["vision_encoder"]).to(device).eval()
+    mask_decoder = build_gsam(cfg["mask_decoder"]).mask_decoder
 
     point_decoder = PointDecoder(mask_decoder).to(device)
 
@@ -66,7 +66,7 @@ def train(config):
 
     optimizer = torch.optim.AdamW(
         list(point_decoder.parameters()), lr=1e-4, weight_decay=1e-5, betas=(0.9, 0.99)
-    ) # 0.0001
+    )  # 0.0001
 
     mseloss = nn.MSELoss()
 
@@ -80,8 +80,7 @@ def train(config):
             tags=["init"],
         )
 
-
-     # start training
+    # start training
     for epoch in range(EPOCH_NUM):
         start_time = time.time()
         point_decoder.train()
@@ -93,13 +92,13 @@ def train(config):
 
             # 冻结encoder参数
             with torch.no_grad():
-                vision_outputs = vision_encoder(imgs, output_hidden_states=True)  
-                img_embeddings = vision_outputs[0] # torch.Size([b, 256, 64, 64])
+                vision_outputs = vision_encoder(imgs, output_hidden_states=True)
+                img_embeddings = vision_outputs[0]  # torch.Size([b, 256, 64, 64])
                 img_hidden_states = vision_outputs[1]
-                
+
                 del vision_outputs, img_embeddings
 
-            features = prompter(cfg['prompter'])(img_hidden_states)
+            features = prompter(cfg["prompter"])(img_hidden_states)
 
             optimizer.zero_grad()
             pred_heatmaps = point_decoder(features)["pred_heatmaps"]  # (b, 1, 256, 256)
@@ -110,26 +109,25 @@ def train(config):
 
             running_loss += loss.item()
 
-
         point_decoder.eval()
         val_loss = 0.0
         with torch.no_grad():
             for imgs, heatmaps in val_loader:
                 imgs = imgs.to(device)
                 gt_heatmaps = heatmaps.to(device)
-                
-                vision_outputs = vision_encoder(imgs, output_hidden_states=True)  
-                img_embeddings = vision_outputs[0] # torch.Size([b, 256, 64, 64])
+
+                vision_outputs = vision_encoder(imgs, output_hidden_states=True)
+                img_embeddings = vision_outputs[0]  # torch.Size([b, 256, 64, 64])
                 img_hidden_states = vision_outputs[1]
-                
+
                 del vision_outputs, img_embeddings
-                
-                features = prompter(cfg['prompter'])(img_hidden_states)
+
+                features = prompter(cfg["prompter"])(img_hidden_states)
                 pred_heatmaps = point_decoder(features)["pred_heatmaps"]
 
                 loss = mseloss(pred_heatmaps, gt_heatmaps)
                 val_loss += loss.item()
-        
+
         end_time = time.time()
         print(
             f"Epoch [{epoch + 1}/{EPOCH_NUM}], Train Loss: {running_loss / len(train_loader)}, Val Loss: {val_loss / len(val_loader)}, Time: {(end_time - start_time)/60:.2f}min"
@@ -151,24 +149,27 @@ def train(config):
         print("Training complete")
 
     # create tmp dir for intermediate checkpoints
-    tmp_save_dir = os.path.join(SAVE_DIR, 'tmp')
+    tmp_save_dir = os.path.join(SAVE_DIR, "tmp")
     os.makedirs(tmp_save_dir, exist_ok=True)
 
     # save intermediate checkpoint every 10 epochs
     if (epoch + 1) % 10 == 0:
-        tmp_ckp_path = os.path.join(tmp_save_dir, f'point_decoder_epoch_{epoch+1}.pth')
-        torch.save({
-            'point_decoder': point_decoder.state_dict(),
-            'prompter': prompter.state_dict()
-        }, tmp_ckp_path)
-        
+        tmp_ckp_path = os.path.join(tmp_save_dir, f"point_decoder_epoch_{epoch+1}.pth")
+        torch.save(
+            {
+                "point_decoder": point_decoder.state_dict(),
+                "prompter": prompter.state_dict(),
+            },
+            tmp_ckp_path,
+        )
+
         print(f"Checkpoint from epoch {epoch+1} saved at {tmp_ckp_path}")
-        
+
         # keep only latest 3 checkpoints
-        tmp_ckps = sorted(glob.glob(os.path.join(tmp_save_dir, '*.pth')))
+        tmp_ckps = sorted(glob.glob(os.path.join(tmp_save_dir, "*.pth")))
         if len(tmp_ckps) > 3:
             os.remove(tmp_ckps[0])  # remove oldest checkpoint
-    
+
     # save checkpoint
     current_timestamp = time.time()
     time_stamp = time.strftime("%m-%d-%H:%M:%S", time.localtime(current_timestamp))
@@ -176,7 +177,6 @@ def train(config):
     ckp_save_path = os.path.join(SAVE_DIR, f"point_decoder_{time_stamp}.pth")
     torch.save(point_decoder.state_dict(), ckp_save_path)
     print(f"Models saved at {ckp_save_path}")
-
 
 
 def main(config):
@@ -199,7 +199,9 @@ if __name__ == "__main__":
         "--epoch_num", default=100, action="store", type=int, required=True
     )
 
-    parser.add_argument("--config", action="store", type=str, default="config/prompter_huge.yaml")
+    parser.add_argument(
+        "--config", action="store", type=str, default="config/prompter_huge.yaml"
+    )
     # parser.add_argument("--sam_ckpt", action="store", type=str)
     # parser.add_argument("--hf_pretrain_name", action="store", type=str)
     parser.add_argument("--root_dir", action="store", type=str)

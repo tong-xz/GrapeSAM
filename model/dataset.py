@@ -7,6 +7,7 @@ from PIL import Image
 import torch.nn.functional as F
 from matplotlib import pyplot as plt
 import torch
+
 # import albumentations as A
 import cv2
 from torch.utils.data import DataLoader
@@ -59,13 +60,14 @@ def _split_phases(root_dir, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
 def _read_phases(root_dir):
     """
     Reads train.txt, val.txt, and test.txt from the root directory and returns three lists.
-    
+
     @param root_dir: The root directory where train.txt, val.txt, and test.txt are located.
     @return: Three lists representing the contents of train.txt, val.txt, and test.txt, respectively.
     """
+
     def read_txt_to_list(file_path):
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path, "r") as f:
                 return [line.strip() for line in f.readlines()]
         except FileNotFoundError:
             print(f"Error: The file {file_path} does not exist.")
@@ -73,8 +75,9 @@ def _read_phases(root_dir):
             print(f"An error occurred while reading the file {file_path}: {e}")
         return []
 
-    split_files = ['train.txt', 'val.txt', 'test.txt']
+    split_files = ["train.txt", "val.txt", "test.txt"]
     return [read_txt_to_list(os.path.join(root_dir, file)) for file in split_files]
+
 
 def _convert(img, keypoints, target_size=(2048, 2048)):
     """
@@ -198,7 +201,7 @@ def _create_heatmap(
 ):
     """
     Generate a heatmap for crowd counting tasks.
-    
+
     :param points: Array of points (N, 2)
     :param img_size: Size of the original image (height, width)
     :param heatmap_size: Size of the heatmap (height, width)
@@ -210,10 +213,10 @@ def _create_heatmap(
         isinstance(img_size, tuple) and img_size[0] == img_size[1]
     ), "img_size type should be tuple and square shape"
     scale = img_size[0] / heatmap_size[0]  # 2048/256 = 8
-    
+
     # Create an empty heatmap
     heatmap = torch.zeros(1, 1, heatmap_size[0], heatmap_size[1])
-    
+
     # If there are no points, return the empty heatmap
     if len(points) == 0:
         return heatmap.squeeze(1).float()
@@ -245,12 +248,10 @@ def _create_heatmap(
     return heatmap.float()
 
 
-def _create_heatmap_dsigma(
-    points, img_size, heatmap_size=(256, 256), normalize=True
-):
+def _create_heatmap_dsigma(points, img_size, heatmap_size=(256, 256), normalize=True):
     """
     Generate a heatmap for crowd counting tasks with dynamic sigma based on nearest neighbor distances.
-    
+
     :param points: Array of points (N, 2)
     :param img_size: Size of the original image (height, width)
     :param heatmap_size: Size of the heatmap (height, width)
@@ -260,12 +261,12 @@ def _create_heatmap_dsigma(
     assert (
         isinstance(img_size, tuple) and img_size[0] == img_size[1]
     ), "img_size type should be tuple and square shape"
-    
+
     scale = img_size[0] / heatmap_size[0]  # 例如 2048/256 = 8，用于缩放点坐标
-    
+
     # 创建一个空的 heatmap
     heatmap = torch.zeros(1, 1, heatmap_size[0], heatmap_size[1])
-    
+
     # 如果没有任何点，返回空的 heatmap
     if len(points) == 0:
         return heatmap.squeeze(1).float()
@@ -279,13 +280,13 @@ def _create_heatmap_dsigma(
     y = torch.arange(0, heatmap_size[1], 1)
     x, y = torch.meshgrid(x, y, indexing="xy")
     x, y = x.unsqueeze(0), y.unsqueeze(0)
-    
+
     # 计算动态 sigma，基于最近邻距离
     distances = torch.cdist(points, points, p=2)  # 欧几里得距离矩阵，形状 (N, N)
-    distances.fill_diagonal_(float('inf'))  # 排除点自身
+    distances.fill_diagonal_(float("inf"))  # 排除点自身
     nearest_distances, _ = torch.min(distances, dim=1)  # 每个点的最近邻距离
     sigma = nearest_distances / 3.0  # 将最近邻距离作为 sigma 值
-    
+
     # 对每个点生成高斯分布并叠加到 heatmap
     for i in range(len(points)):
         mu_x, mu_y = points[i, 0].view(-1, 1, 1), points[i, 1].view(-1, 1, 1)
@@ -305,25 +306,21 @@ def _create_heatmap_dsigma(
     return heatmap.float()
 
 
-
-
 class VividDataset(Dataset):
-    def __init__(
-        self, data_root, file_list, mode="train"
-    ) -> None:
+    def __init__(self, data_root, file_list, mode="train") -> None:
         super(VividDataset, self).__init__()
         self.data_root = data_root
         self.img_path = os.path.join(data_root, "imgs")
         self.ann_path = os.path.join(data_root, "anns")
         self.file_list = file_list
-        self.img_transform  = transforms.Compose([
-            transforms.ToTensor(),
-
-            transforms.Normalize(
-                mean=[0.485, 0.456, 0.406], 
-                std=[0.229, 0.224, 0.225]
-            ),
-        ])
+        self.img_transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                ),
+            ]
+        )
         self.mode = mode
 
     def __len__(self):
@@ -332,9 +329,10 @@ class VividDataset(Dataset):
     def __getitem__(self, index):
         # read img and npy
         item_name = self.file_list[index]
+
         img_file_path, dot_ann_path = os.path.join(
-            self.img_path, item_name + ".png"
-        ), os.path.join(self.ann_path, item_name + ".npy")
+            self.img_path, item_name
+        ), os.path.join(self.ann_path, item_name.split(".")[0] + ".npy")
         img = Image.open(img_file_path).convert("RGB")
         if self.img_transform:
             img = self.img_transform(img)
@@ -353,8 +351,8 @@ class VividDataset(Dataset):
             del keypoints
             return img, heatmap
 
-        elif self.mode == "test":
-            #reverse normalize
+        else:
+            # reverse normalize
             inv_transform = transforms.Normalize(
                 mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
                 std=[1 / 0.229, 1 / 0.224, 1 / 0.225],
@@ -365,11 +363,8 @@ class VividDataset(Dataset):
             point_num = len(keypoints)
             return img, point_num
 
-        else:
-            raise NotImplementedError("Please use right mode code")
 
-
-def build_loader(root_dir, batch_size, phase='train'):
+def build_loader(root_dir, batch_size, phase="train"):
     """
     the only function exposed to the outer class to build dataloaders
 
@@ -379,12 +374,11 @@ def build_loader(root_dir, batch_size, phase='train'):
     """
 
     # only initiate once
-    if not os.path.exists(os.path.join(root_dir, 'train.txt')):
+    if not os.path.exists(os.path.join(root_dir, "train.txt")):
         print
         train_files, val_files, test_files = _split_phases(root_dir)
     else:
         train_files, val_files, test_files = _read_phases(root_dir)
-
 
     train_dataset, val_dataset, test_dataset = (
         VividDataset(root_dir, train_files, mode="train"),  # loss
@@ -394,13 +388,8 @@ def build_loader(root_dir, batch_size, phase='train'):
 
     # loader
     train_loader = DataLoader(
-        train_dataset, batch_size, shuffle=True
+        train_dataset, batch_size, num_workers=31, shuffle=True, pin_memory=True
     )
-    val_loader = DataLoader(
-        val_dataset, batch_size, shuffle=True
-    )
-    test_loader = DataLoader(
-        test_dataset, batch_size, num_workers=4, pin_memory=True
-    )
+    val_loader = DataLoader(val_dataset, batch_size, num_workers=31)
+    test_loader = DataLoader(test_dataset, batch_size, num_workers=31)
     return {"train": train_loader, "val": val_loader, "test": test_loader}
-

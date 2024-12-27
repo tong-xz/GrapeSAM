@@ -1,6 +1,6 @@
 import os
 
-print(f"Using GPU: {os.environ['CUDA_VISIABLE_DEVICES']}")
+print(f"Using GPU: {os.environ.get('CUDA_VISIBLE_DEVICES', 'Not Set')}")
 import argparse
 import torch
 import torch.nn as nn
@@ -14,6 +14,7 @@ import numpy as np
 import random
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.strategies import DDPStrategy
+from lightning.pytorch.loggers import WandbLogger
 
 
 class TrainerLightning(pl.LightningModule):
@@ -95,10 +96,11 @@ class TrainerLightning(pl.LightningModule):
             del vision_outputs, img_embeddings
 
         features = prompter(self.cfg["prompter"])(img_hidden_states)
+
         pred_heatmaps = self(features)["pred_heatmaps"]
 
         loss = self.mseloss(pred_heatmaps, gt_heatmaps)
-        self.log("train_loss", loss, on_epoch=True, prog_bar=True)
+        self.log("train_loss", loss, on_epoch=True, prog_bar=True, sync_dist=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -112,10 +114,13 @@ class TrainerLightning(pl.LightningModule):
             img_hidden_states = vision_outputs[1]
             del vision_outputs, img_embeddings
 
-        features = prompter(self.cfg["prompter"])(img_hidden_states)
-        pred = self(features)
-        pred_points_num = pred["pred_points"].shape[1]
+            features = prompter(self.cfg["prompter"])(img_hidden_states)
+            pred = self(features)
 
+        pred_points_num = pred["pred_points"].shape[1]
+        import pdb
+
+        pdb.set_trace()
         mae = torch.abs(gt_points - pred_points_num).mean()
         rmse = torch.sqrt(torch.mean((gt_points - pred_points_num) ** 2))
 
@@ -165,14 +170,16 @@ def main(config):
     # Seed for reproducibility
     model.set_seed(42)
 
-    # Initialize wandb
+    # Initialize wandb logger
     if config["wandb"]:
         wandb.login()
-        wandb.init(
+        wandb_logger = WandbLogger(
             project="Vivid-exp",
             name="fpn with original mask decoder",
             tags=["init"],
         )
+    else:
+        wandb_logger = None
 
     # Create a PyTorch Lightning Trainer
     checkpoint_callback = ModelCheckpoint(
@@ -185,10 +192,10 @@ def main(config):
 
     trainer = pl.Trainer(
         max_epochs=config["epoch_num"],
-        accelerator="auto",  # Handles multi-GPU / TPU setup
-        devices="auto",  # Automatically use available GPUs or CPU
+        accelerator="auto",
+        devices="auto",
         callbacks=[checkpoint_callback],
-        logger=wandb if config["wandb"] else None,
+        logger=wandb_logger,
         strategy=(DDPStrategy(find_unused_parameters=True)),
     )
 

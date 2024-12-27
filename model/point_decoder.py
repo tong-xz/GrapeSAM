@@ -6,9 +6,11 @@ from segment_anything.modeling.mask_decoder import MLP
 from segment_anything.modeling.common import LayerNorm2d
 from segment_anything.modeling.transformer import TwoWayTransformer
 
-'''
+"""
 huggingface sam version pointdecoder
-'''
+"""
+
+
 class ROIHeadMLP(nn.Module):
     def __init__(self):
         super(ROIHeadMLP, self).__init__()
@@ -46,7 +48,6 @@ class PointDecoder(nn.Module):
     def __init__(self, mask_decoder) -> None:
         super().__init__()
 
-        
         transformer_dim = 256
         activation = nn.GELU
         self.transformer = TwoWayTransformer(
@@ -72,43 +73,66 @@ class PointDecoder(nn.Module):
             transformer_dim, transformer_dim, transformer_dim // 8, 3
         )
 
-        
         transformer_state_dict = mask_decoder.transformer.state_dict()
         new_transformer_state_dict = {}
-        
-        '''
+
+        """
         different eps: 
         'layers.0.layer_norm1': LayerNorm((256,), eps=1e-06, elementwise_affine=True)
         'layers.0.norm1': LayerNorm((256,), eps=1e-05, elementwise_affine=True)
-        '''
+        """
         for k, v in transformer_state_dict.items():
             # 替换 'layer_norm' 为 'norm'
-            new_key = k.replace('layer_norm', 'norm')
+            new_key = k.replace("layer_norm", "norm")
             new_transformer_state_dict[new_key] = v
 
         self.transformer.load_state_dict(new_transformer_state_dict)
 
         # 逐层加载
-        self.output_upscaling[0].load_state_dict(mask_decoder.upscale_conv1.state_dict())
-        self.output_upscaling[1].load_state_dict(mask_decoder.upscale_layer_norm.state_dict())
-        self.output_upscaling[3].load_state_dict(mask_decoder.upscale_conv2.state_dict())
-        
-        self.output_hypernetworks_mlp.layers[0].load_state_dict({
-            'weight': mask_decoder.output_hypernetworks_mlps[0].state_dict()['layers.0.weight'],
-            'bias': mask_decoder.output_hypernetworks_mlps[0].state_dict()['layers.0.bias']
-        })
+        self.output_upscaling[0].load_state_dict(
+            mask_decoder.upscale_conv1.state_dict()
+        )
+        self.output_upscaling[1].load_state_dict(
+            mask_decoder.upscale_layer_norm.state_dict()
+        )
+        self.output_upscaling[3].load_state_dict(
+            mask_decoder.upscale_conv2.state_dict()
+        )
 
-        self.output_hypernetworks_mlp.layers[1].load_state_dict({
-            'weight': mask_decoder.output_hypernetworks_mlps[0].state_dict()['proj_in.weight'],
-            'bias': mask_decoder.output_hypernetworks_mlps[0].state_dict()['proj_in.bias']
-        })
+        self.output_hypernetworks_mlp.layers[0].load_state_dict(
+            {
+                "weight": mask_decoder.output_hypernetworks_mlps[0].state_dict()[
+                    "layers.0.weight"
+                ],
+                "bias": mask_decoder.output_hypernetworks_mlps[0].state_dict()[
+                    "layers.0.bias"
+                ],
+            }
+        )
 
-        self.output_hypernetworks_mlp.layers[2].load_state_dict({
-            'weight': mask_decoder.output_hypernetworks_mlps[0].state_dict()['proj_out.weight'],
-            'bias': mask_decoder.output_hypernetworks_mlps[0].state_dict()['proj_out.bias']
-        })
-        
+        self.output_hypernetworks_mlp.layers[1].load_state_dict(
+            {
+                "weight": mask_decoder.output_hypernetworks_mlps[0].state_dict()[
+                    "proj_in.weight"
+                ],
+                "bias": mask_decoder.output_hypernetworks_mlps[0].state_dict()[
+                    "proj_in.bias"
+                ],
+            }
+        )
 
+        self.output_hypernetworks_mlp.layers[2].load_state_dict(
+            {
+                "weight": mask_decoder.output_hypernetworks_mlps[0].state_dict()[
+                    "proj_out.weight"
+                ],
+                "bias": mask_decoder.output_hypernetworks_mlps[0].state_dict()[
+                    "proj_out.bias"
+                ],
+            }
+        )
+
+        # parameters
         from .utils import PositionEmbeddingRandom
 
         embed_dim = 256
@@ -126,7 +150,7 @@ class PointDecoder(nn.Module):
         sparse_embeddings = output_tokens.unsqueeze(0).expand(
             image_embeddings.size(0), -1, -1
         )
-        
+
         image_pe = self.get_dense_pe()
         src, pos_src = image_embeddings, image_pe
         b, c, h, w = src.shape
@@ -134,7 +158,7 @@ class PointDecoder(nn.Module):
 
         src = src.transpose(1, 2).view(b, c, h, w)
         mask_tokens_out = hs[:, 0, :]
-        
+
         upscaled_embedding = self.output_upscaling(src)
         hyper_in = self.output_hypernetworks_mlp(mask_tokens_out).unsqueeze(1)
         b, c, h, w = upscaled_embedding.shape
@@ -142,14 +166,12 @@ class PointDecoder(nn.Module):
         pred_heatmaps = (hyper_in @ upscaled_embedding.view(b, c, h * w)).view(
             b, -1, h, w
         )
-        
+
         if self.training:
             return {"pred_heatmaps": pred_heatmaps}
 
-
         if masks is not None:
             pred_heatmaps *= masks
-        
 
         with torch.no_grad():
             from .ops.ops import _nms

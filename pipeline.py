@@ -53,7 +53,7 @@ def setup_cfg(args):
 
 def get_parser():
     parser = argparse.ArgumentParser(description="pipeline config")
-    
+
     # maskformer2
     parser.add_argument(
         "--config-file",
@@ -61,7 +61,7 @@ def get_parser():
         metavar="FILE",
         help="path to config file",
     )
-    
+
     parser.add_argument(
         "--output",
         help="A file or directory to save output visualizations. "
@@ -74,7 +74,7 @@ def get_parser():
         default=[],
         nargs=argparse.REMAINDER,
     )
-    
+
     return parser
 
 
@@ -98,7 +98,9 @@ def resize_and_pad_image(img, target_size=(1024, 1024), pad_color=(0, 0, 0)):
     left = (target_size[0] - new_w) // 2
     right = target_size[0] - new_w - left
 
-    padded_img = cv2.copyMakeBorder(resized_img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=pad_color)
+    padded_img = cv2.copyMakeBorder(
+        resized_img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=pad_color
+    )
     return padded_img
 
 
@@ -112,7 +114,7 @@ if __name__ == "__main__":
     cfg = setup_cfg(args)
 
     demo = VisualizationDemo(cfg)
-    
+
     CKPT_PATH = "/home/xz/Dev/GrapeSAM/weights/vivid6/point_decoder_11-13-07:37:21.pth"
     POINT_CONFIG = "/home/xz/Dev/GrapeSAM/config/prompter_huge.yaml"
     ROOT_DIR = "/home/xz/Dev/GrapeSAM/data/vivid-6t05"
@@ -120,78 +122,83 @@ if __name__ == "__main__":
 
     # point model setup
     point_config = load_config(POINT_CONFIG)
-    vision_encoder = build_gsam(point_config['vision_encoder']).to(DEVICE)
-    mask_decoder = build_gsam(point_config['mask_decoder']).mask_decoder.to(DEVICE)
+    vision_encoder = build_gsam(point_config["vision_encoder"]).to(DEVICE)
+    mask_decoder = build_gsam(point_config["mask_decoder"]).mask_decoder.to(DEVICE)
     # prompt_encoder = build_gsam(point_config['prompt_encoder']).to(DEVICE)
-    test_loader = build_loader(ROOT_DIR, batch_size=1)['test']
-    
+    test_loader = build_loader(ROOT_DIR, batch_size=1)["test"]
+
     point_decoder = PointDecoder(mask_decoder).to(DEVICE)
     point_decoder.load_state_dict(torch.load(CKPT_PATH, map_location=DEVICE))
     point_decoder.eval()
     point_decoder.max_points = 2048
     point_decoder.nms_kernel_size = 3
-    point_decoder.point_threshold = 0.15 # exp 0.28
-    
+    point_decoder.point_threshold = 0.15  # exp 0.28
+
     for img, _ in test_loader:
         start_time = time.time()
         point_img, mask_img = img.clone(), img.clone()
-        
+
         # mask prediction
-        mask_img = mask_img.squeeze(0).permute(1, 2, 0).cpu().numpy()  # Convert to (H,W,C) numpy array
+        mask_img = (
+            mask_img.squeeze(0).permute(1, 2, 0).cpu().numpy()
+        )  # Convert to (H,W,C) numpy array
         mask_img = (mask_img * 255).astype(np.uint8)  # Scale to 0-255 range
         mask_img = cv2.cvtColor(mask_img, cv2.COLOR_RGB2BGR)  # Convert RGB to BGR
-        
+
         predictions, visualized_output = demo.run_on_image(mask_img)
-        pred_masks = predictions['instances'].pred_masks.cpu()
+        pred_masks = predictions["instances"].pred_masks.cpu()
         # import pdb; pdb.set_trace()
-        
+
         # mask merge
         merged_mask = pred_masks.any(dim=0).float()  # (1024, 1024)
 
-        downsampled_mask = F.interpolate(
-            merged_mask.unsqueeze(0).unsqueeze(0),  # 添加 batch 和通道维度 -> (1, 1, 1024, 1024)
-            size=(256, 256),  # 目标大小
-            mode='bilinear',
-            align_corners=False
-        ).squeeze(0).squeeze(0)  # 移除 batch 和通道维度 -> (256, 256)
+        downsampled_mask = (
+            F.interpolate(
+                merged_mask.unsqueeze(0).unsqueeze(
+                    0
+                ),  # 添加 batch 和通道维度 -> (1, 1, 1024, 1024)
+                size=(256, 256),  # 目标大小
+                mode="bilinear",
+                align_corners=False,
+            )
+            .squeeze(0)
+            .squeeze(0)
+        )  # 移除 batch 和通道维度 -> (256, 256)
 
         final_mask = downsampled_mask.unsqueeze(0).unsqueeze(0).cuda()
-        
+
         # point prediction
         with torch.inference_mode(), torch.no_grad():
-        # img: torch.Size([1, 3, 1024, 1024]); 
+            # img: torch.Size([1, 3, 1024, 1024]);
             point_img = point_img.to(DEVICE)
             features = vision_encoder(point_img)[0].to(DEVICE)
-            pred_points = point_decoder(features, masks=final_mask)['pred_points']
+            pred_points = point_decoder(features, masks=final_mask)["pred_points"]
 
-        
         pred_points = pred_points.squeeze(0).cpu()
-        
-        
+
         logger.info(
             "{} and {} in {:.2f}s".format(
+                (
                     "detected {} grape clusters".format(len(predictions["instances"]))
-                        if "instances" in predictions
-                        else "finished",
-                    "detected {} berries".format(len(pred_points)),
-                    time.time() - start_time,
+                    if "instances" in predictions
+                    else "finished"
+                ),
+                "detected {} berries".format(len(pred_points)),
+                time.time() - start_time,
             )
         )
-        
-        #TODO finish prompt encoder and mask decoder part
-        
+
+        # TODO finish prompt encoder and mask decoder part
+
         # pred_points = pred_points.unsqueeze(0).cuda()
         # pred_masks = pred_masks.cuda()
-        # sam_mask_outputs = mask_decoder(features, dense_prompt_embeddings=pred_masks, sparse_prompt_embeddings=pred_points, 
+        # sam_mask_outputs = mask_decoder(features, dense_prompt_embeddings=pred_masks, sparse_prompt_embeddings=pred_points,
         #                                  image_positional_embeddings=None, multimask_output=True)
         img = cv2.cvtColor(mask_img, cv2.COLOR_BGR2RGB)  # Convert RGB to BGR
-        plot_results(img, masks=pred_masks, points=pred_points, dot_size=12, save_path=args.output)
-
-        
-    
-
-            
-
-
-
-   
+        plot_results(
+            img,
+            masks=pred_masks,
+            points=pred_points,
+            dot_size=12,
+            save_path=args.output,
+        )
