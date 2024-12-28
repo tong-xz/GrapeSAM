@@ -47,6 +47,9 @@ class TrainerLightning(pl.LightningModule):
         )
         print("---Decoder Parameters: %.2fM" % (n_parameters / 1e6,))
 
+        # 将prompter作为模型的一个属性
+        self.prompter_model = prompter(self.cfg["prompter"]).to(self.devices)
+
     def forward(self, features):
         return self.point_decoder(features)
 
@@ -77,7 +80,8 @@ class TrainerLightning(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
-            list(self.point_decoder.parameters()),
+            list(self.point_decoder.parameters())
+            + list(self.prompter_model.parameters()),  # 添加prompter参数
             lr=1e-4,
             weight_decay=1e-5,
             betas=(0.9, 0.99),
@@ -95,18 +99,25 @@ class TrainerLightning(pl.LightningModule):
             img_hidden_states = vision_outputs[1]
             del vision_outputs, img_embeddings
 
-        features = prompter(self.cfg["prompter"])(img_hidden_states)
+        features = self.prompter_model(img_hidden_states)
 
         pred_heatmaps = self(features)["pred_heatmaps"]
 
         loss = self.mseloss(pred_heatmaps, gt_heatmaps)
-        self.log("train_loss", loss, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log(
+            "train_loss",
+            loss,
+            on_epoch=True,
+            on_step=False,
+            prog_bar=True,
+            sync_dist=True,
+        )
         return loss
 
     def validation_step(self, batch, batch_idx):
-        imgs, gt_points = batch
+        imgs, gt_point_nums = batch
         imgs = imgs.to(self.device)
-        gt_points = gt_points.to(self.device)
+        gt_point_nums = gt_point_nums.to(self.device)
 
         with torch.no_grad():
             vision_outputs = self.vision_encoder(imgs, output_hidden_states=True)
@@ -114,38 +125,32 @@ class TrainerLightning(pl.LightningModule):
             img_hidden_states = vision_outputs[1]
             del vision_outputs, img_embeddings
 
-            features = prompter(self.cfg["prompter"])(img_hidden_states)
+            features = self.prompter_model(img_hidden_states)
             pred = self(features)
 
-        pred_points_num = pred["pred_points"].shape[1]
-        import pdb
+        pred_point_nums = pred["pred_points"].shape[1]
 
-        pdb.set_trace()
-        mae = torch.abs(gt_points - pred_points_num).mean()
-        rmse = torch.sqrt(torch.mean((gt_points - pred_points_num) ** 2))
+        mae = torch.abs(gt_point_nums - pred_point_nums).mean()
+        rmse = torch.sqrt(torch.mean((gt_point_nums - pred_point_nums) ** 2))
 
-        self.log(
-            "val_mae",
-            mae,
+        metrics = {
+            "val_mae": mae,
+            "val_rmse": rmse,
+        }
+        self.log_dict(
+            metrics,
             on_step=False,
             on_epoch=True,
             prog_bar=True,
             sync_dist=True,
-        )
-        self.log(
-            "val_rmse",
-            rmse,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-            sync_dist=True,
+            batch_size=imgs.shape[0],
         )
 
         return {
             "mae": mae,
             "rmse": rmse,
-            "gt_points": gt_points,
-            "pred_points_num": pred_points_num,
+            "gt_point_nums": gt_point_nums,
+            "pred_point_nums": pred_point_nums,
         }
 
     def on_epoch_end(self):
@@ -187,7 +192,7 @@ def main(config):
         filename="point_decoder-{epoch:02d}-{val_mae:.2f}",
         monitor="val_mae",
         mode="min",
-        save_top_k=3,
+        save_top_k=5,
     )
 
     trainer = pl.Trainer(

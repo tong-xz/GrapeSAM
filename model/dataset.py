@@ -359,8 +359,8 @@ class VividDataset(Dataset):
             )
             img = inv_transform(img)
 
-            # there should be the number of points
-            point_num = len(keypoints)
+            # Convert point count to float32
+            point_num = torch.tensor(len(keypoints), dtype=torch.float32)
             return img, point_num
 
 
@@ -382,7 +382,7 @@ def build_loader(root_dir, batch_size, phase="train"):
 
     train_dataset, val_dataset, test_dataset = (
         VividDataset(root_dir, train_files, mode="train"),  # loss
-        VividDataset(root_dir, val_files, mode="train"),  # loss
+        VividDataset(root_dir, val_files, mode="val"),  # loss
         VividDataset(root_dir, test_files, mode="test"),  # metric mse/msn
     )
 
