@@ -11,6 +11,7 @@ from model.sam import build_gsam
 from model.point_decoder import PointDecoder
 from model.prompter import prompter
 from model.utils import load_config
+from model.sam_hf import GSamModel
 import numpy as np
 import random
 from lightning.pytorch.callbacks import ModelCheckpoint
@@ -33,10 +34,15 @@ class TrainerLightning(pl.LightningModule):
 
         # Load config file and build models
         self.cfg = load_config(self.CONFIG_PATH)
-        self.vision_encoder = (
-            build_gsam(self.cfg["vision_encoder"]).to(self.devices).eval()
+        # self.vision_encoder = (
+        #     build_gsam(self.cfg["vision_encoder"]).to(self.devices).eval()
+        # )
+        self.sam_model = GSamModel.from_pretrained("facebook/sam-vit-huge").to(
+            self.devices
         )
-        self.mask_decoder = build_gsam(self.cfg["mask_decoder"]).mask_decoder
+        self.vision_encoder = self.sam_model.vision_encoder
+        self.mask_decoder = self.sam_model.mask_decoder
+        # self.mask_decoder = build_gsam(self.cfg["mask_decoder"]).mask_decoder
         self.point_decoder = PointDecoder(self.mask_decoder).to(self.devices)
 
         # Loss function
@@ -98,6 +104,7 @@ class TrainerLightning(pl.LightningModule):
             vision_outputs = self.vision_encoder(imgs, output_hidden_states=True)
             img_embeddings = vision_outputs[0]
             img_hidden_states = vision_outputs[1]
+
             del vision_outputs, img_embeddings
 
         features = self.prompter_model(img_hidden_states)
