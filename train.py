@@ -6,7 +6,8 @@ import torch
 import torch.nn as nn
 import wandb
 import lightning.pytorch as pl
-from model import build_loader, build_gsam
+from model import build_loader
+from model.sam import build_gsam
 from model.point_decoder import PointDecoder
 from model.prompter import prompter
 from model.utils import load_config

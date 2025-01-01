@@ -2,64 +2,84 @@ import torch
 import torch.nn as nn
 from transformers import SamConfig
 from transformers.models.sam.modeling_sam import (
-    SamModel, SamVisionEncoder, SamMaskDecoder, SamPositionalEmbedding, SamPromptEncoder
+    SamModel,
+    SamVisionEncoder,
+    SamMaskDecoder,
+    SamPositionalEmbedding,
+    SamPromptEncoder,
 )
 from collections import OrderedDict
 from typing import Optional, Dict
 
 
-'''
+"""
 ====================================================================================================
 ===========================================SAM RELATED==============================================
 ====================================================================================================
-'''
+"""
 
 
 def build_gsam(cfg: Dict):
-    type = cfg['type']
-    if type == 'GSAMVisionEncoder':
-        return GSAMVisionEncoder(hf_pretrain_name=cfg['hf_pretrain_name'], init_cfg=cfg['init_cfg'], extra_cfg=cfg['extra_cfg'], device=cfg['device'])
-    elif type == 'GSAMPromptEncoder':
-        return GSAMPromptEncoder(hf_pretrain_name=cfg['hf_pretrain_name'], init_cfg=cfg['init_cfg'])
-    elif type == 'GSAMMaskDecoder':
-        return GSAMMaskDecoder(hf_pretrain_name=cfg['hf_pretrain_name'], init_cfg=cfg['init_cfg'], extra_cfg=cfg['extra_cfg'], device=cfg['device'])
+    type = cfg["type"]
+    if type == "GSAMVisionEncoder":
+        return GSAMVisionEncoder(
+            hf_pretrain_name=cfg["hf_pretrain_name"],
+            init_cfg=cfg["init_cfg"],
+            extra_cfg=cfg["extra_cfg"],
+            device=cfg["device"],
+        )
+    elif type == "GSAMPromptEncoder":
+        return GSAMPromptEncoder(
+            hf_pretrain_name=cfg["hf_pretrain_name"], init_cfg=cfg["init_cfg"]
+        )
+    elif type == "GSAMMaskDecoder":
+        return GSAMMaskDecoder(
+            hf_pretrain_name=cfg["hf_pretrain_name"],
+            init_cfg=cfg["init_cfg"],
+            extra_cfg=cfg["extra_cfg"],
+            device=cfg["device"],
+        )
     else:
         return NotImplementedError
 
 
 def _load_weights(model, name, ckpt_path, device):
-        '''
-        model: self.vision_encoder
-        name: 'vision_encoder.'
-        '''
-        state_dict = torch.load(ckpt_path, map_location=device)
-        new_state_dict = OrderedDict()
-        
-        for key, value in state_dict.items():
-            if key.startswith(name):
-                new_key = key.replace(name, '')
-                new_state_dict[new_key] = value
-        
-        # TODO  'shared_image_embedding.positional_embedding'   'prompt_encoder.shared_embedding.positional_embedding', position
+    """
+    model: self.vision_encoder
+    name: 'vision_encoder.'
+    """
+    state_dict = torch.load(ckpt_path, map_location=device)
+    new_state_dict = OrderedDict()
 
-        missing_keys, unexpected_keys = model.load_state_dict(new_state_dict, strict=False)
-        total_params = sum(param.numel() for param in new_state_dict.values())
-        total_size = sum(param.element_size() * param.numel() for param in new_state_dict.values())
-        print(f"{name} weight successfully loaded {total_size/1024/1024:.2f} MB")
-    
-        if len(missing_keys) > 0:
-            print(f"Missing keys: {missing_keys}")
-        if len(unexpected_keys) > 0:
-            print(f"Unexpected keys: {unexpected_keys}")
+    for key, value in state_dict.items():
+        if key.startswith(name):
+            new_key = key.replace(name, "")
+            new_state_dict[new_key] = value
+
+    # TODO  'shared_image_embedding.positional_embedding'   'prompt_encoder.shared_embedding.positional_embedding', position
+
+    missing_keys, unexpected_keys = model.load_state_dict(new_state_dict, strict=False)
+    total_params = sum(param.numel() for param in new_state_dict.values())
+    total_size = sum(
+        param.element_size() * param.numel() for param in new_state_dict.values()
+    )
+    print(f"{name} weight successfully loaded {total_size/1024/1024:.2f} MB")
+
+    if len(missing_keys) > 0:
+        print(f"Missing keys: {missing_keys}")
+    if len(unexpected_keys) > 0:
+        print(f"Unexpected keys: {unexpected_keys}")
+
 
 class GSAMVisionEncoder(nn.Module):
-    '''
-        hf_pretrain_name: 'work_dirs/sam_cache/sam_vit_base'
-        extra_cfg: {'output_hidden_states': True}
-        peft_config: none
-        init_cfg: {'type': 'Pretrained', 'checkpoint': 'work_dirs/sam_cache/sam_vit_base/pytorch_model.bin'}
-    
-    '''
+    """
+    hf_pretrain_name: 'work_dirs/sam_cache/sam_vit_base'
+    extra_cfg: {'output_hidden_states': True}
+    peft_config: none
+    init_cfg: {'type': 'Pretrained', 'checkpoint': 'work_dirs/sam_cache/sam_vit_base/pytorch_model.bin'}
+
+    """
+
     def __init__(self, hf_pretrain_name, init_cfg, extra_cfg, device):
         super().__init__()
         # load config
@@ -69,8 +89,10 @@ class GSAMVisionEncoder(nn.Module):
 
         self.vision_encoder = SamVisionEncoder(sam_config).to(device)
         if init_cfg is not None:
-            _load_weights(self.vision_encoder, 'vision_encoder.', init_cfg['checkpoint'], device)
-    
+            _load_weights(
+                self.vision_encoder, "vision_encoder.", init_cfg["checkpoint"], device
+            )
+
     def forward(self, *args, **kwargs):
         return self.vision_encoder(*args, **kwargs)
 
@@ -82,10 +104,12 @@ class GSAMPromptEncoder(nn.Module):
         sam_config = SamConfig.from_pretrained(hf_pretrain_name).prompt_encoder_config
         if extra_cfg is not None:
             sam_config.update(extra_cfg)
-    
+
         self.prompt_encoder = SamPromptEncoder(sam_config, shared_patch_embedding=None)
         if init_cfg is not None:
-            _load_weights(self.prompt_encoder, 'prompt_encoder.', init_cfg['checkpoint'], device)
+            _load_weights(
+                self.prompt_encoder, "prompt_encoder.", init_cfg["checkpoint"], device
+            )
 
     def forward(self, *args, **kwargs):
         """
@@ -106,15 +130,16 @@ class GSAMMaskDecoder(nn.Module):
     def __init__(self, hf_pretrain_name, init_cfg, extra_cfg, device):
         super().__init__()
         sam_config = SamConfig.from_pretrained(hf_pretrain_name).mask_decoder_config
-        
+
         if extra_cfg is not None:
             sam_config.update(extra_cfg)
-        
 
         self.mask_decoder = SamMaskDecoder(sam_config)
-        
+
         if init_cfg is not None:
-            _load_weights(self.mask_decoder, 'mask_decoder.', init_cfg['checkpoint'], device)
+            _load_weights(
+                self.mask_decoder, "mask_decoder.", init_cfg["checkpoint"], device
+            )
 
     def forward(self, *args, **kwargs):
         """
@@ -134,9 +159,8 @@ class GSAMMaskDecoder(nn.Module):
             output_attentions (bool, *optional*):
                 Whether or not to return the attentions tensors of all attention layers.
         """
-        
-        return self.mask_decoder(*args, **kwargs)
 
+        return self.mask_decoder(*args, **kwargs)
 
 
 class GSAMPositionalEmbedding(nn.Module):
@@ -150,7 +174,12 @@ class GSAMPositionalEmbedding(nn.Module):
         self.shared_image_embedding = SamPositionalEmbedding(sam_config)
 
         if init_cfg is not None:
-            _load_weights(self.shared_image_embedding, 'shared_image_embedding.', init_cfg['checkpoint'], device)
+            _load_weights(
+                self.shared_image_embedding,
+                "shared_image_embedding.",
+                init_cfg["checkpoint"],
+                device,
+            )
 
     def forward(self, *args, **kwargs):
         return self.shared_image_embedding(*args, **kwargs)

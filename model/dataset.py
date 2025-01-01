@@ -360,8 +360,11 @@ class VividDataset(Dataset):
             img = inv_transform(img)
 
             # Convert point count to float32
+            # TODO temporary change to return points instead of num of points
             point_num = torch.tensor(len(keypoints), dtype=torch.float32)
             return img, point_num
+
+            # return img, keypoints
 
 
 def build_loader(root_dir, batch_size, phase="train"):

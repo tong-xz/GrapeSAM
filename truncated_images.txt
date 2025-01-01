@@ -1,3 +1,0 @@
-/home/xz/Dev/GrapeSAM/data/vivid/imgs/1599030751681.jpg
-/home/xz/Dev/GrapeSAM/data/vivid/imgs/1599042714933.jpg
-/home/xz/Dev/GrapeSAM/data/vivid/imgs/1597915859896.jpg
