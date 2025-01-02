@@ -7,7 +7,6 @@ import torch.nn as nn
 import wandb
 import lightning.pytorch as pl
 from model import build_loader
-from model.sam import build_gsam
 from model.point_decoder import PointDecoder
 from model.prompter import prompter
 from model.utils import load_config
@@ -37,6 +36,7 @@ class TrainerLightning(pl.LightningModule):
         # self.vision_encoder = (
         #     build_gsam(self.cfg["vision_encoder"]).to(self.devices).eval()
         # )
+
         self.sam_model = GSamModel.from_pretrained("facebook/sam-vit-huge").to(
             self.devices
         )
@@ -100,12 +100,11 @@ class TrainerLightning(pl.LightningModule):
         imgs = imgs.to(self.device)
         gt_heatmaps = heatmaps.to(self.device)
 
-        with torch.no_grad():
-            vision_outputs = self.vision_encoder(imgs, output_hidden_states=True)
-            img_embeddings = vision_outputs[0]
-            img_hidden_states = vision_outputs[1]
+        vision_outputs = self.vision_encoder(imgs, output_hidden_states=True)
+        img_embeddings = vision_outputs[0]
+        img_hidden_states = vision_outputs[1]
 
-            del vision_outputs, img_embeddings
+        del vision_outputs, img_embeddings
 
         features = self.prompter_model(img_hidden_states)
 
@@ -188,7 +187,7 @@ def main(config):
         wandb.login()
         wandb_logger = WandbLogger(
             project="Vivid-exp",
-            name="fpn with original mask decoder",
+            name="fpn finetune vit",
             tags=["init"],
         )
     else:

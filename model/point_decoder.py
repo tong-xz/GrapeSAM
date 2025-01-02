@@ -169,10 +169,12 @@ class PointDecoder(nn.Module):
 
         if self.training:
             return {"pred_heatmaps": pred_heatmaps}
+        
 
         if masks is not None:
             pred_heatmaps *= masks
 
+        
         with torch.no_grad():
             from .ops.ops import _nms
 

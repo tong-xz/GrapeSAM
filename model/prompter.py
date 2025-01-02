@@ -181,7 +181,6 @@ class FeatureAggregator(nn.Module):
 
 
     def forward(self, inputs):
-        
         assert len(inputs) == len(self.in_channels)
         inputs = [einops.rearrange(x, 'b h w c -> b c h w') for x in inputs]
 
