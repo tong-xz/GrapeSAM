@@ -4,7 +4,7 @@ from model import build_loader
 from model.utils import load_config
 from model import sam_hf
 import torch
-from transformers import SamModel
+from transformers import SamModel, SamProcessor
 from model.sam_hf import GSamModel
 import numpy as np
 import matplotlib.pyplot as plt
@@ -88,20 +88,20 @@ for imgs, points in test_loader:
             imgs[0], image_embeddings.attentions
         )  # Take first image in batch
 
-    #     sparse_embeddings, dense_embeddings = model.prompt_encoder(
-    #         input_points=points, input_labels=labels, input_boxes=None, input_masks=None
-    #     )
-    #     image_positional_embeddings = model.get_image_wide_positional_embeddings()
-    #     low_res_masks, iou_predictions, mask_decoder_attentions = model.mask_decoder(
-    #         image_embeddings=image_embeddings,
-    #         image_positional_embeddings=image_positional_embeddings,
-    #         sparse_prompt_embeddings=sparse_embeddings,
-    #         dense_prompt_embeddings=dense_embeddings,
-    #         multimask_output=True,
-    #         attention_similarity=None,
-    #         target_embedding=None,
-    #         output_attentions=None,
-    #     )
+        sparse_embeddings, dense_embeddings = model.prompt_encoder(
+            input_points=points, input_labels=labels, input_boxes=None, input_masks=None
+        )
+        image_positional_embeddings = model.get_image_wide_positional_embeddings()
+        low_res_masks, iou_predictions, mask_decoder_attentions = model.mask_decoder(
+            image_embeddings=image_embeddings,
+            image_positional_embeddings=image_positional_embeddings,
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output=True,
+            attention_similarity=None,
+            target_embedding=None,
+            output_attentions=None,
+        )
 
     # # Convert masks to numpy and get IoU scores
     # masks = low_res_masks.squeeze(0).squeeze(0).cpu().numpy()  # Shape: (3, 256, 256)
