@@ -5,7 +5,7 @@ import colorama
 from colorama import Fore, Style
 
 # Global path variables
-JSON_PATH = "/home/xz/Documents/Vivid/ann.json"
+JSON_PATH = "/home/xz/Documents/Vivid/ann_v2.json"
 IMGS_DIR = "/home/xz/Documents/Vivid/imgs"
 NPY_DIR = "/home/xz/Documents/Vivid/anns"  # 新增 NPY 文件夹路径
 EXPECTED_IMG_COUNT = 5000
