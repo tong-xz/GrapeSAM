@@ -87,6 +87,6 @@ def visualize_coco_masks(annotation_file, image_name):
 
 
 # Example usage
-annotation_file = "./merged_coco.json"
-image_name = "1597923437135.jpg"  # Replace with your image file name
+annotation_file = "/home/xz/Documents/Vivid/ann.json"
+image_name = "1.png"  # Replace with your image file name
 visualize_coco_masks(annotation_file, image_name)
