@@ -11,10 +11,17 @@ from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 
+import numpy as np
+import matplotlib.pyplot as plt
 
-def show_mask(mask, ax, random_color=False):
+import torch
+
+
+def show_mask(mask, ax, random_color=False, color=None):
     if random_color:
         color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
+    elif color is not None:
+        color = np.array(color)
     else:
         color = np.array([30 / 255, 144 / 255, 255 / 255, 0.6])
     h, w = mask.shape[-2:]
@@ -105,48 +112,56 @@ def show_points(coords, labels, ax, marker_size=375):
     )
 
 
-def show_masks_on_image(raw_image, masks, scores):
+def show_masks_on_image(raw_image, masks, scores, title, transparency=0.8):
+    # Handle single mask case
     if len(masks.shape) == 4:
         masks = masks.squeeze()
-    if scores.shape[0] == 1:
-        scores = scores.squeeze()
+    if len(masks.shape) == 2:  # Single mask
+        masks = masks[None, ...]  # Add batch dimension
 
-    nb_predictions = scores.shape[-1]
-    fig, axes = plt.subplots(1, nb_predictions, figsize=(15, 15))
+    # Handle single score case
+    if isinstance(scores, torch.Tensor):
+        if scores.shape[0] == 1:
+            scores = scores.squeeze()
+        if scores.ndim == 0:  # Single score
+            scores = scores[None]  # Add batch dimension
 
+    # Create a single subplot
+    plt.figure(figsize=(10, 10))
+    plt.imshow(np.array(raw_image))
+
+    # 预定义一组明亮的颜色
+    BRIGHT_COLORS = [
+        [1.0, 0.0, 0.0],  # 红
+        [0.0, 1.0, 0.0],  # 绿
+        [0.0, 0.0, 1.0],  # 蓝
+        [1.0, 1.0, 0.0],  # 黄
+        [1.0, 0.0, 1.0],  # 品红
+        [0.0, 1.0, 1.0],  # 青
+    ]
+
+    # Show all masks on the same image with bright colors
     for i, (mask, score) in enumerate(zip(masks, scores)):
         mask = mask.cpu().detach()
-        axes[i].imshow(np.array(raw_image))
-        show_mask(mask, axes[i])
-        axes[i].title.set_text(f"Mask {i+1}, Score: {score.item():.3f}")
-        axes[i].axis("off")
+        color = BRIGHT_COLORS[i % len(BRIGHT_COLORS)] + [transparency]
+        show_mask(mask, plt.gca(), random_color=False, color=color)
+    # Add a title showing all scores
+    # score_text = "\n".join(
+    #     [f"Mask {i+1} Score: {score.item():.3f}" for i, score in enumerate(scores)]
+    # )
+    plt.title(title)
+    plt.axis("off")
     plt.show()
 
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = SamModel.from_pretrained("facebook/sam-vit-huge").to(device)
-processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
-
-vivid_exp_dataset = VividDataset(
-    data_root="/home/xz/Dev/GrapeSAM/data/vivid",
-    txt_path="/home/xz/Dev/GrapeSAM/data/vivid/test.txt",
-    json_path="/home/xz/Dev/GrapeSAM/data/vivid/instances_default_v4_updated.json",
-)
-
-for batch in vivid_exp_dataset:
-    img_path, bboxes, masks = batch
-
-    raw_image = Image.open(img_path).convert("RGB")
-
-    bboxes = [].append(bboxes)
-
+def sam_bbox_inference(model, processor, raw_image, bboxes):
     inputs = processor(raw_image, input_boxes=bboxes, return_tensors="pt").to(device)
     image_embeddings = model.get_image_embeddings(inputs["pixel_values"])
     inputs.pop("pixel_values", None)
     inputs.update({"image_embeddings": image_embeddings})
 
     with torch.no_grad():
-        outputs = model(**inputs, multimask_output=True)
+        outputs = model(**inputs, multimask_output=False)
 
     masks = processor.image_processor.post_process_masks(
         outputs.pred_masks.cpu(),
@@ -154,5 +169,31 @@ for batch in vivid_exp_dataset:
         inputs["reshaped_input_sizes"].cpu(),
     )
     scores = outputs.iou_scores
+    return masks, scores
 
-    show_masks_on_image(raw_image, masks[0], scores)
+
+if __name__ == "__main__":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = SamModel.from_pretrained("facebook/sam-vit-huge").to(device)
+    processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
+
+    vivid_exp_dataset = VividDataset(
+        data_root="/home/xz/Dev/GrapeSAM/data/vivid",
+        txt_path="/home/xz/Dev/GrapeSAM/data/vivid/test.txt",
+        json_path="/home/xz/Dev/GrapeSAM/data/vivid/instances_default_v4.json",
+    )
+
+    for batch in vivid_exp_dataset:
+        img_path, bboxes, gt_masks = batch
+        raw_image = Image.open(img_path).convert("RGB")
+        gt_masks = torch.from_numpy(gt_masks).float()
+        bboxes = [bboxes]
+
+        pred_masks, pred_scores = sam_bbox_inference(
+            model, processor, raw_image, bboxes
+        )
+        # masks: [torch.size([n, 1, h, w])]
+        # gt_masks: [torch.size([n, h, w])]
+
+        show_masks_on_image(raw_image, pred_masks[0], pred_scores, title="SAM")
+        show_masks_on_image(raw_image, gt_masks, pred_scores, title="GT")

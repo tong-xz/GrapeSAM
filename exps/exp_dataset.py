@@ -87,15 +87,35 @@ class VividDataset(Dataset):
         # Calculate bboxes from masks
         # TODO gt bboxes has problems, now use mask to calculate bboxes
         gt_bboxes = []
-        for mask in gt_masks:
-            # Convert polygon to points array
-            points = np.concatenate(
-                [np.array(polygon).reshape(-1, 2) for polygon in mask]
-            )
-            # Get min/max coordinates
-            x_min, y_min = points.min(axis=0)
-            x_max, y_max = points.max(axis=0)
-            gt_bboxes.append([x_min, y_min, x_max, y_max])
+        if len(gt_masks) > 0:
+            for mask in gt_masks:
+                # Convert polygon to points array
+                points = np.concatenate(
+                    [np.array(polygon).reshape(-1, 2) for polygon in mask]
+                )
+                # Get min/max coordinates
+                x_min, y_min = points.min(axis=0)
+                x_max, y_max = points.max(axis=0)
+                gt_bboxes.append([x_min, y_min, x_max, y_max])
+        else:
+            gt_bboxes = []
+
+        # Transform polygon masks to binary masks
+        binary_masks = []
+        if len(gt_masks) > 0:
+            img = Image.open(img_path)
+            for mask in gt_masks:
+                # Create binary mask with image dimensions
+                binary_mask = np.zeros((img.size[1], img.size[0]), dtype=np.uint8)
+                # Convert each polygon in the mask
+                for polygon in mask:
+                    poly = np.array(polygon).reshape((-1, 2)).astype(np.int32)
+                    binary_mask = cv2.fillPoly(binary_mask, [poly], 1)
+                binary_masks.append(binary_mask)
+            # Stack all masks into a single numpy array
+            gt_masks = np.stack(binary_masks, axis=0)
+        else:
+            gt_masks = np.zeros((0, img.size[1], img.size[0]), dtype=np.uint8)
 
         return img_path, gt_bboxes, gt_masks
 
@@ -108,6 +128,6 @@ if __name__ == "__main__":
     dataset = VividDataset(data_root, txt_path, json_path)
     img_path, bboxes, masks = dataset[0]
     img = Image.open(img_path).convert("RGB")
-
+    print(img_path, bboxes)
     show_masks_on_image(img, masks, random_colors=True)
     show_boxes_on_image(img, bboxes)
