@@ -82,11 +82,6 @@ for imgs, points in test_loader:
         image_embeddings = model.vision_encoder(
             imgs, output_attentions=True, return_dict=True
         )
-        breakpoint()
-        # Visualize attention maps
-        visualize_attention(
-            imgs[0], image_embeddings.attentions
-        )  # Take first image in batch
 
         sparse_embeddings, dense_embeddings = model.prompt_encoder(
             input_points=points, input_labels=labels, input_boxes=None, input_masks=None
@@ -102,26 +97,3 @@ for imgs, points in test_loader:
             target_embedding=None,
             output_attentions=None,
         )
-
-    # # Convert masks to numpy and get IoU scores
-    # masks = low_res_masks.squeeze(0).squeeze(0).cpu().numpy()  # Shape: (3, 256, 256)
-    # iou_scores = iou_predictions.squeeze(0).squeeze(0).cpu().numpy()  # Shape: (3,)
-
-    # # Create subplot for each mask
-    # fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-
-    # # Display original image
-    # img_np = imgs.squeeze(0).cpu().permute(1, 2, 0).numpy()
-    # for ax in axes:
-    #     ax.imshow(img_np)
-
-    # # Show masks with IoU scores as titles
-    # for idx, (mask, iou, ax) in enumerate(zip(masks, iou_scores, axes)):
-    #     show_mask(mask, ax, random_color=True)
-    #     ax.set_title(f"Mask {idx+1}, IoU: {iou:.3f}")
-    #     ax.axis("off")
-
-    # plt.tight_layout()
-    # plt.show()
-
-    # breakpoint()
