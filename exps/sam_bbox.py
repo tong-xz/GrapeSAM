@@ -10,9 +10,10 @@ from PIL import Image
 
 import numpy as np
 import matplotlib.pyplot as plt
-
-import torch
+from torchvision.ops import masks_to_boxes
 from utils import show_masks_on_image
+from torchmetrics.detection.mean_ap import MeanAveragePrecision
+from torchmetrics.detection.iou import IntersectionOverUnion
 
 
 def sam_bbox_inference(model, processor, raw_image, bboxes):
@@ -35,15 +36,16 @@ def sam_bbox_inference(model, processor, raw_image, bboxes):
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = SamModel.from_pretrained("facebook/sam-vit-huge").to(device)
-    processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
+    model = SamModel.from_pretrained("/data/models/sam/huggingface/sam-vit-huge/").to(device)
+    processor = SamProcessor.from_pretrained("/data/models/sam/huggingface/sam-vit-huge/")
 
     vivid_exp_dataset = VividDataset(
-        data_root="/home/xz/Dev/GrapeSAM/data/vivid",
-        txt_path="/home/xz/Dev/GrapeSAM/data/vivid/test.txt",
-        json_path="/home/xz/Dev/GrapeSAM/data/vivid/instances_default_v4.json",
+        data_root="/data/datasets/grape/Vivid",
+        txt_path="/data/datasets/grape/Vivid/test.txt",
+        json_path="/data/datasets/grape/vivid_mask/instances_default_v4.json",
     )
 
+    metric = MeanAveragePrecision()
     for batch in vivid_exp_dataset:
         img_path, bboxes, gt_masks = batch
         raw_image = Image.open(img_path).convert("RGB")
@@ -53,8 +55,14 @@ if __name__ == "__main__":
         pred_masks, pred_scores = sam_bbox_inference(
             model, processor, raw_image, bboxes
         )
+        breakpoint()
+        metric.update(pred_masks, gt_masks)
+
         # masks: [torch.size([n, 1, h, w])]
         # gt_masks: [torch.size([n, h, w])]
 
         show_masks_on_image(raw_image, pred_masks[0], pred_scores, title="SAM")
         show_masks_on_image(raw_image, gt_masks, pred_scores, title="GT")
+
+    result = metric.compute()
+    print("AP:", result)

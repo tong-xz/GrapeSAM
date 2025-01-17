@@ -19,7 +19,7 @@ from lightning.pytorch.loggers import WandbLogger
 
 
 class TrainerLightning(pl.LightningModule):
-    def __init__(self, config):
+    def __init__(self, config, devices="cpu"):
         super().__init__()
 
         # Initialize configurations
@@ -29,9 +29,7 @@ class TrainerLightning(pl.LightningModule):
         self.USE_WANDB = config["wandb"]
         self.SAVE_DIR = config["save_dir"]
         self.CONFIG_PATH = config["config"]
-        self.devices = config.get(
-            "devices", torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        )
+        self.devices = devices
 
         # Load config file and build models
         self.cfg = load_config(self.CONFIG_PATH)
@@ -43,8 +41,8 @@ class TrainerLightning(pl.LightningModule):
         self.sam_model = GSamModel.from_pretrained(
             self.cfg["vision_encoder"]["hf_pretrain_name"]
         ).to(self.devices)
-        self.vision_encoder = self.sam_model.vision_encoder
-        self.mask_decoder = self.sam_model.mask_decoder
+        self.vision_encoder = self.sam_model.vision_encoder.to(self.devices)
+        self.mask_decoder = self.sam_model.mask_decoder.to(self.devices)
         # self.mask_decoder = build_gsam(self.cfg["mask_decoder"]).mask_decoder
         self.point_decoder = PointDecoder(self.mask_decoder).to(self.devices)
 
@@ -66,19 +64,21 @@ class TrainerLightning(pl.LightningModule):
         img_hidden_states = vision_outputs[1]
         del vision_outputs, img_embeddings
         features = self.prompter_model(img_hidden_states)
-        pred = self.point_decoder(features)
 
         if coarse_mask is not None:
             fine_mask = self.mask_decoder(
                 features,
                 dense_prompt_embeddings=coarse_mask,
-                sparse_prompt_embeddings=pred["pred_points"],
+                # sparse_prompt_embeddings=pred["pred_points"],
+                sparse_prompt_embeddings=None,
                 image_positional_embeddings=None,
                 multimask_output=True,
             )
-            return pred, fine_mask
-
-        return pred
+            return fine_mask
+        
+        else:
+            pred = self.point_decoder(features)
+            return pred
 
     def set_seed(self, seed):
         torch.manual_seed(seed)

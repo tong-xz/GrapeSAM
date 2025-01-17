@@ -29,11 +29,18 @@ def predict_points(img_path, crose_mask):
         config=get_arg(),
         strict=False,
     )
-    model.eval()
+    model = model.to("cpu")
+    model = model.eval()
     pred = model(img.unsqueeze(0))
     return pred
 
 
 if __name__ == "__main__":
-    predictions = predict_points("/data/datasets/grape/Vivid/images/777.png")
-    breakpoint()
+    img_paths = [
+        "/data/datasets/grape/Vivid/imgs/777.png",
+        # "/data/datasets/grape/Vivid/images/778.png",
+    ]
+    for img_path in img_paths:
+        coarse_mask = predict_mask(img_path)
+        predictions = predict_points(img_path, coarse_mask)
+        breakpoint()
