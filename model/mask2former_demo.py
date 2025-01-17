@@ -23,8 +23,8 @@ from detectron2.data.detection_utils import read_image
 from detectron2.projects.deeplab import add_deeplab_config
 from detectron2.utils.logger import setup_logger
 
-from mask2former import add_maskformer2_config
-from predictor import Mask2FormerRunner
+from model.mask2former import add_maskformer2_config
+from model.predictor import Mask2FormerRunner
 
 
 # constants
@@ -46,14 +46,10 @@ def get_parser():
     parser = argparse.ArgumentParser(description="maskformer2 demo for builtin configs")
     parser.add_argument(
         "--config-file",
-        default="configs/coco/panoptic-segmentation/maskformer2_R50_bs16_50ep.yaml",
+        default="config/coco/instance-segmentation/maskformer2_R50_bs16_50ep.yaml",
         metavar="FILE",
         help="path to config file",
     )
-    parser.add_argument(
-        "--webcam", action="store_true", help="Take inputs from webcam."
-    )
-    parser.add_argument("--video-input", help="Path to video file.")
     parser.add_argument(
         "--input",
         nargs="+",
@@ -75,7 +71,7 @@ def get_parser():
     parser.add_argument(
         "--opts",
         help="Modify config options using the command-line 'KEY VALUE' pairs",
-        default=[],
+        default=["MODEL.WEIGHTS", "output/model_0214999.pth"],
         nargs=argparse.REMAINDER,
     )
     return parser
@@ -97,6 +93,27 @@ def test_opencv_video_format(codec, file_ext):
             return True
         return False
 
+def run_on_image(img):
+    args = get_parser().parse_args()
+    setup_logger(name="fvcore")
+    logger = setup_logger()
+    logger.info("Arguments: " + str(args))
+    cfg = setup_cfg(args)
+    demo = Mask2FormerRunner(cfg)
+
+    start_time = time.time()
+    predictions, visualized_output = demo.run_on_image(img)
+    logger.info(
+        "{} in {:.2f}s".format(   
+            (
+                "detected {} instances".format(len(predictions["instances"]))
+                if "instances" in predictions
+                else "finished"
+            ),
+            time.time() - start_time,
+        )
+    )
+    return predictions, visualized_output
 
 if __name__ == "__main__":
     mp.set_start_method("spawn", force=True)

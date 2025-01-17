@@ -67,15 +67,15 @@ class GSamVisionEncoder(SamVisionEncoder):
         # Call parent class constructor
         super().__init__(config)
 
-        self.layers = nn.ModuleList()
-        for i in range(config.num_hidden_layers):
-            layer = ViTLayer(
-                config,
-                window_size=(
-                    config.window_size if i not in config.global_attn_indexes else 0
-                ),
-            )
-            self.layers.append(layer)
+        # self.layers = nn.ModuleList()
+        # for i in range(config.num_hidden_layers):
+        #     layer = ViTLayer(
+        #         config,
+        #         window_size=(
+        #             config.window_size if i not in config.global_attn_indexes else 0
+        #         ),
+        #     )
+        #     self.layers.append(layer)
 
     def forward(self, *args, **kwargs):
         # Call parent class forward method

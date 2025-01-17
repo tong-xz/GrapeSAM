@@ -310,8 +310,8 @@ class VividDataset(Dataset):
     def __init__(self, data_root, file_list, mode="train") -> None:
         super(VividDataset, self).__init__()
         self.data_root = data_root
-        self.img_path = os.path.join(data_root, "imgs")
-        self.ann_path = os.path.join(data_root, "anns")
+        self.img_path = os.path.join(data_root, "images")
+        self.ann_path = os.path.join(data_root, "annotations")
         self.file_list = file_list
         self.img_transform = transforms.Compose(
             [

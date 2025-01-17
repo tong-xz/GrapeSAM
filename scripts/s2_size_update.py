@@ -22,8 +22,8 @@ def clean_and_rotate_image(image_path):
 
 def check_image_sizes():
     # 读取 JSON 文件
-    json_path = "./merged_coco.json"
-    imgs_dir = "/home/xz/Documents/Vivid/imgs"
+    json_path = "/data/datasets/grape/vivid_mask/ann_v2.json"
+    imgs_dir = "/data/datasets/grape/Vivid/images/"
 
     # 统计变量
     total_images = 0

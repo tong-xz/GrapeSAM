@@ -8,9 +8,9 @@ from pycocotools.coco import COCO
 from pycocotools import mask as mask_utils
 
 # Global path variables
-JSON_PATH = "/home/xz/Documents/Vivid/ann_v3.json"
-IMGS_DIR = "/home/xz/Documents/Vivid/imgs"
-NPY_DIR = "/home/xz/Documents/Vivid/anns"  # 新增 NPY 文件夹路径
+JSON_PATH = "/data/datasets/grape/vivid_mask/ann_v3.json"
+IMGS_DIR = "/data/datasets/grape/Vivid/images/"
+NPY_DIR = "/data/datasets/grape/Vivid/annotations/points/"  # 新增 NPY 文件夹路径
 EXPECTED_IMG_COUNT = 5000
 
 # 初始化 colorama

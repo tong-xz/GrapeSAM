@@ -25,7 +25,7 @@ def convert_extensions_to_lowercase(directory):
 
 if __name__ == "__main__":
     # Specify your directory path
-    directory = "/home/xz/Documents/Vivid/imgs"
+    directory = "/data/datasets/grape/Vivid/images/"
 
     # Run the conversion
     convert_extensions_to_lowercase(directory)
