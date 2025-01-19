@@ -102,8 +102,8 @@ class VividDataset(Dataset):
 
         # Transform polygon masks to binary masks
         binary_masks = []
+        img = Image.open(img_path)
         if len(gt_masks) > 0:
-            img = Image.open(img_path)
             for mask in gt_masks:
                 # Create binary mask with image dimensions
                 binary_mask = np.zeros((img.size[1], img.size[0]), dtype=np.uint8)

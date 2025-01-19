@@ -14,7 +14,7 @@ def predict_mask(img_path):
     return predictions, visualized_output
 
 
-def predict_points(img_path, crose_mask):
+def predict_points(img_path, coarse_mask):
     img = Image.open(img_path).convert("RGB")
     img_transform = transforms.Compose(
         [
