@@ -2,16 +2,34 @@ import numpy as np
 from model.dataset import _convert
 from model.mask2former_demo import run_on_image
 from detectron2.data.detection_utils import read_image
+from model.sam_hf import GSamMaskDecoder, GSamModel
 from train import TrainerLightning, get_arg
 import torchvision.transforms as transforms
 from PIL import Image
 
 
-def predict_mask(img_path):
+sam_model = GSamModel.from_pretrained("/data/models/sam/huggingface/sam-vit-huge/").to(
+    "cpu"
+)
+mask_decoder = sam_model.mask_decoder
+
+
+def predict_coarse_mask(img_path):
     print("Predicting...")
     img_BGR = read_image(img_path, format="BGR")
     predictions, visualized_output = run_on_image(img_BGR)
     return predictions, visualized_output
+
+
+def refine_mask(img_path, coarse_mask):
+    fine_mask = mask_decoder(
+                features,
+                dense_prompt_embeddings=coarse_mask,
+                # sparse_prompt_embeddings=pred["pred_points"],
+                sparse_prompt_embeddings=None,
+                image_positional_embeddings=None,
+                multimask_output=True,
+            )
 
 
 def predict_points(img_path, coarse_mask):
@@ -42,5 +60,4 @@ if __name__ == "__main__":
     ]
     for img_path in img_paths:
         coarse_mask = predict_mask(img_path)
-        predictions = predict_points(img_path, coarse_mask)
         breakpoint()

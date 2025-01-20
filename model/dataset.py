@@ -311,7 +311,7 @@ class VividDataset(Dataset):
         super(VividDataset, self).__init__()
         self.data_root = data_root
         self.img_path = os.path.join(data_root, "imgs")
-        self.ann_path = os.path.join(data_root, "anns")
+        self.ann_path = os.path.join(data_root, "anns/points")
         self.file_list = file_list
         self.img_transform = transforms.Compose(
             [

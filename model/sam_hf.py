@@ -37,6 +37,7 @@ class GSamModel(SamPreTrainedModel):
             config.prompt_encoder_config,
             self.shared_image_embedding,
         )
+        # breakpoint()
         self.mask_decoder = GSamMaskDecoder(config.mask_decoder_config)
 
         self.post_init()

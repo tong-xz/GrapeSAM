@@ -49,21 +49,43 @@ if __name__ == "__main__":
         json_path="/data/datasets/grape/vivid_mask/instances_default_v4.json",
     )
 
+    cnt = 0
+
     metric = MeanAveragePrecision(iou_type="segm")
-    for batch in vivid_exp_dataset:
+
+#     data_loader = DataLoader(vivid_exp_dataset, batch_size=1, shuffle=False)
+    # data_iter = iter(data_loader)
+
+    data_iter = iter( vivid_exp_dataset)
+
+    while True:
+        try:
+            batch = next(data_iter)
+        except StopIteration:
+            break
+
+        except Exception as e:
+            print(e)
+            continue
+
         img_path, bboxes, gt_masks = batch
         raw_image = Image.open(img_path).convert("RGB")
         gt_masks = torch.from_numpy(gt_masks).float()
         bboxes = [bboxes]
 
-        pred_masks, pred_scores = sam_bbox_inference(
-            model, processor, raw_image, bboxes
-        )
+        try:
+            pred_masks, pred_scores = sam_bbox_inference(
+                model, processor, raw_image, bboxes
+            )
+        except Exception as e:
+            print(e)
+            continue
+
         preds = [
             dict(
                 # masks=torch.tensor([mask_pred], dtype=torch.bool),
                 masks=pred_masks[0].type(torch.bool).any(dim=0),
-                scores=torch.tensor([1]),
+                scores=torch.tensor([1.]),
                 labels=torch.tensor([0]),
             )
         ]
@@ -81,6 +103,8 @@ if __name__ == "__main__":
 
         # show_masks_on_image(raw_image, pred_masks[0], pred_scores, title="SAM")
         # show_masks_on_image(raw_image, gt_masks, pred_scores, title="GT")
+        cnt += 1
 
     result = metric.compute()
     print("AP:", result)
+    print("cnt:", cnt)
