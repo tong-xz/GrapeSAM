@@ -9,11 +9,11 @@ from pycocotools.coco import COCO
 import cv2
 
 
-def show_mask(mask, ax, random_color=False):
+def show_mask(mask, ax, random_color=False, alpha=0.6):
     if random_color:
-        color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
+        color = np.concatenate([np.random.random(3), np.array([alpha])], axis=0)
     else:
-        color = np.array([30 / 255, 144 / 255, 255 / 255, 0.6])
+        color = np.array([30 / 255, 144 / 255, 255 / 255, alpha])
     h, w = mask.shape[-2:]
     mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
     ax.imshow(mask_image)
@@ -36,24 +36,16 @@ def show_boxes_on_image(raw_image, boxes):
     plt.show()
 
 
-def show_masks_on_image(raw_image, masks, random_colors=False):
+def show_masks_on_image(raw_image, masks, random_colors=True, alpha=0.9):
     plt.figure(figsize=(10, 10))
     plt.imshow(raw_image)
     ax = plt.gca()
 
-    for mask in masks:
-        # 处理COCO格式的分割标注
-        if isinstance(mask, list):  # polygon format
-            # 创建二值mask
-            binary_mask = np.zeros(
-                (raw_image.size[1], raw_image.size[0]), dtype=np.uint8
-            )
-            for polygon in mask:
-                # 将多边形坐标转换为整数数组
-                poly = np.array(polygon).reshape((-1, 2)).astype(np.int32)
-                # 填充多边形区域
-                binary_mask = cv2.fillPoly(binary_mask, [poly], 1)
-            show_mask(binary_mask, ax, random_color=random_colors)
+    if isinstance(masks, np.ndarray):  # Direct binary masks
+        for mask in masks:
+            show_mask(mask, ax, random_color=random_colors, alpha=alpha)
+    else:
+        raise ValueError("Unsupported mask format. Masks should be a NumPy array.")
 
     plt.axis("on")
     plt.show()
@@ -78,35 +70,43 @@ class VividDataset(Dataset):
         img_path = os.path.join(self.img_path, file_name)
 
         # Get annotations for this image
-        id = self.file_to_id[file_name]
-        ann_ids = self.coco.getAnnIds(imgIds=[id])
+        img_id = self.file_to_id[file_name]
+        ann_ids = self.coco.getAnnIds(imgIds=[img_id])
         annotations = self.coco.loadAnns(ann_ids)
 
-        gt_masks = [item["segmentation"] for item in annotations]
+        # gt_masks = [item["segmentation"] for item in annotations if len(item["segmentation"][0])!=0]
+
+        # gt_bboxes = [item["bbox"] for item in annotations]
+
+        gt_masks, gt_bboxes = [], []
+        for item in annotations:
+            if len(item["bbox"]) != 0:
+                gt_masks.append(item["segmentation"])
+                gt_bboxes.append(item["bbox"])
 
         # Calculate bboxes from masks
-        # TODO gt bboxes has problems, now use mask to calculate bboxes
-        gt_bboxes = []
-        if len(gt_masks) > 0:
-            for mask in gt_masks:
-                # Convert polygon to points array
-                points = np.concatenate(
-                    [np.array(polygon).reshape(-1, 2) for polygon in mask]
-                )
-                # Get min/max coordinates
-                x_min, y_min = points.min(axis=0)
-                x_max, y_max = points.max(axis=0)
-                gt_bboxes.append([x_min, y_min, x_max, y_max])
-        else:
-            gt_bboxes = []
+        # gt_bboxes = []
+        # if len(gt_masks) > 0:
+        #     for mask in gt_masks:
+        #         # Convert polygon to points array
+        #         points = np.concatenate(
+        #             [np.array(polygon).reshape(-1, 2) for polygon in mask]
+        #         )
+        #         # Get min/max coordinates
+        #         x_min, y_min = points.min(axis=0)
+        #         x_max, y_max = points.max(axis=0)
+        #         gt_bboxes.append([x_min, y_min, x_max, y_max])
+        # else:
+        #     gt_bboxes = []
 
         # Transform polygon masks to binary masks
         binary_masks = []
         img = Image.open(img_path)
+        img_height, img_width = img.height, img.width
         if len(gt_masks) > 0:
             for mask in gt_masks:
                 # Create binary mask with image dimensions
-                binary_mask = np.zeros((img.size[1], img.size[0]), dtype=np.uint8)
+                binary_mask = np.zeros((img_height, img_width), dtype=np.uint8)
                 # Convert each polygon in the mask
                 for polygon in mask:
                     poly = np.array(polygon).reshape((-1, 2)).astype(np.int32)
@@ -115,19 +115,19 @@ class VividDataset(Dataset):
             # Stack all masks into a single numpy array
             gt_masks = np.stack(binary_masks, axis=0)
         else:
-            gt_masks = np.zeros((0, img.size[1], img.size[0]), dtype=np.uint8)
+            gt_masks = np.zeros((0, img_height, img_width), dtype=np.uint8)
 
         return img_path, gt_bboxes, gt_masks
 
 
 if __name__ == "__main__":
-    data_root = "/home/xz/Dev/GrapeSAM/data/vivid"
+    data_root = "/home/xz/Documents/Vivid"
     txt_path = os.path.join(data_root, "test.txt")
-    json_path = os.path.join(data_root, "instances_default_v4.json")
+    json_path = os.path.join(data_root, "instances_updated.json")
 
     dataset = VividDataset(data_root, txt_path, json_path)
-    img_path, bboxes, masks = dataset[0]
+    img_path, bboxes, masks = dataset[109]
+
     img = Image.open(img_path).convert("RGB")
-    print(img_path, bboxes)
-    show_masks_on_image(img, masks, random_colors=True)
-    show_boxes_on_image(img, bboxes)
+    show_masks_on_image(np.array(img), masks, random_colors=True)
+    show_boxes_on_image(np.array(img), bboxes)

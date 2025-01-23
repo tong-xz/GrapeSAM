@@ -4,18 +4,12 @@
 [Sheet](https://docs.google.com/spreadsheets/d/1DM6vgAi5Fy2fUahmxdyjnrkGGhRGVAz7F3GxPt5ehOg/edit?gid=0#gid=0)
 
 
-https://blog.csdn.net/qq_61676281/article/details/131845706
-
-![alt text](assets/image.png)
-
 ## Checkpoint Download
 
-How to download huggingface model weights?
 ```bash
-cd pretrain
-bash download_huggingface.sh facebook/sam-vit-huge sam-vit-huge
-cd ..
+bash pretrain/download_huggingface.sh facebook/<model_name> <model_name>
 ```
+`model_name`: sam-vit-base, sam-vit-large, and sam-vit-huge
 
 ## Train
 ```python

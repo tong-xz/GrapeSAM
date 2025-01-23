@@ -98,7 +98,7 @@ def show_points(coords, labels, ax, marker_size=375):
     )
 
 
-def show_masks_on_image(raw_image, masks, scores, title, transparency=0.8):
+def show_masks_on_image(raw_image, masks, scores=None, title=None, transparency=0.8):
     # Handle single mask case
     if len(masks.shape) == 4:
         masks = masks.squeeze()
