@@ -14,7 +14,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import torch
-from utils.show import show_masks_on_image
+from model.show import show_masks_on_image
 
 
 def get_points(npy_path):
