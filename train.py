@@ -15,11 +15,19 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.strategies import DDPStrategy
 from lightning.pytorch.loggers import WandbLogger
 
+import numpy as np
+from detectron2.config import get_cfg
+from detectron2.data.detection_utils import read_image
+from detectron2.projects.deeplab import add_deeplab_config
+from detectron2.utils.logger import setup_logger
+
+from model.mask2former import add_maskformer2_config
+from model.predictor import Mask2FormerRunner
 
 class TrainerLightning(pl.LightningModule):
     def __init__(self, config, devices="cpu"):
         super().__init__()
-
+        # sam config
         # Initialize configurations
         self.config = config
         self.BATCH_SIZE = config["batch_size"]
@@ -39,11 +47,21 @@ class TrainerLightning(pl.LightningModule):
         self.vision_encoder = self.sam_model.vision_encoder.to(self.devices)
         self.mask_decoder = self.sam_model.mask_decoder.to(self.devices)
 
+        # mask2former
+        cfg = get_cfg()
+        add_deeplab_config(cfg)
+        add_maskformer2_config(cfg)
+        cfg.merge_from_file("config/coco/instance-segmentation/maskformer2_R50_bs16_50ep.yaml")
+        cfg.merge_from_list(["MODEL.WEIGHTS", "output/model_0214999.pth"])
+        cfg.freeze()
+        self.mask2former = Mask2FormerRunner(cfg)
+
     def forward(self, imgs, coarse_mask=None):
         vision_outputs = self.vision_encoder(imgs, output_hidden_states=True)
         img_embeddings = vision_outputs[0]
         img_hidden_states = vision_outputs[1]
-        del vision_outputs, img_embeddings
+        # del vision_outputs, img_embeddings
+        redictions, visualized_output = self.mask2former.run_on_image(imgs)
 
         # TODO
         fine_mask = self.mask_decoder(
