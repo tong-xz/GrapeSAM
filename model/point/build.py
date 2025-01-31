@@ -64,9 +64,9 @@ def convert_heatmap_to_points(
     # prepare for sam inference format
     pred_points = pred_points.cpu().tolist()
 
-    # pred_points_sam = [[[point] for point in pred_points[0]]]
+    pred_points_sam = [[[point] for point in pred_points[0]]]
 
-    return pred_points, pred_points_score
+    return pred_points_sam, pred_points_score
 
 
 def sam_points_inference(
