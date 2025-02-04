@@ -14,7 +14,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import torch
-from utils.show import show_masks_on_image
 
 
 def get_points(npy_path):
@@ -27,6 +26,43 @@ def get_points(npy_path):
     """
     PPPM = [[[point] for point in points_list]]
     return PPPM
+
+
+def show_mask(mask, ax, random_color=False, color=None, alpha=0.6):
+    if random_color:
+        color = np.concatenate([np.random.random(3), np.array([alpha])], axis=0)
+    elif color is not None:
+        color = np.array(list(color) + [alpha])
+    else:
+        color = np.array([30 / 255, 144 / 255, 255 / 255, alpha])
+    h, w = mask.shape[-2:]
+    mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
+    ax.imshow(mask_image)
+
+
+def show_masks_on_image(raw_image, masks, title=None, alpha=0.6, show_background=True):
+    # Handle single mask case
+    if len(masks.shape) == 4:
+        masks = masks.squeeze()
+    if len(masks.shape) == 2:  # Single mask
+        masks = masks[None, ...]  # Add batch dimension
+
+    # Create a single subplot
+    plt.figure(figsize=(10, 10))
+
+    # Only show the background image if show_background is True
+    if show_background:
+        plt.imshow(np.array(raw_image))
+
+    # Show all masks on the same image with random colors
+    for mask in masks:
+        mask = mask.cpu().detach()
+        show_mask(mask, plt.gca(), random_color=True, alpha=alpha)
+
+    plt.title(title)
+    plt.axis("off")
+    plt.savefig(f"{title}.png")
+    plt.show()
 
 
 def sam_points_inference(model, processor, raw_image, points, multimask_output):
@@ -52,8 +88,12 @@ if __name__ == "__main__":
     model = SamModel.from_pretrained("facebook/sam-vit-huge").to(device)
     processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
 
-    img_path = "/home/xz/Documents/Vivid/imgs/1082.png"
-    npy_path = "/home/xz/Documents/Vivid/anns/1082.npy"
+    img_path = (
+        "/home/xz/Dev/baseline-exp-playground/DATASET/vivid-close/test/immature_508.png"
+    )
+    npy_path = (
+        "/home/xz/Dev/baseline-exp-playground/DATASET/vivid-close/test/immature_508.npy"
+    )
     raw_image = Image.open(img_path).convert("RGB")
 
     points = get_points(npy_path)
@@ -64,4 +104,4 @@ if __name__ == "__main__":
     # use when multi-mask is true
     masks = masks[0][:, 0:1, :, :]
 
-    show_masks_on_image(raw_image, masks, scores, title="multi-mask-1082")
+    show_masks_on_image(raw_image, masks, title="multi-mask-1082")

@@ -286,3 +286,43 @@ class GSamPositionalEmbedding(SamMaskDecoder):
 
     def forward(self, *args, **kwargs):
         return super().forward(*args, **kwargs)
+
+
+def predict_by_points(
+    model, processor, raw_image, points, multimask_output, optimal=True, device="cuda"
+):
+    inputs = processor(raw_image, input_points=points, return_tensors="pt").to(device)
+    image_embeddings = model.get_image_embeddings(inputs["pixel_values"])
+    inputs.pop("pixel_values", None)
+    inputs.update({"image_embeddings": image_embeddings})
+
+    with torch.no_grad():
+        outputs = model(**inputs, multimask_output=multimask_output)
+
+    masks = processor.image_processor.post_process_masks(
+        outputs.pred_masks.cpu(),
+        inputs["original_sizes"].cpu(),
+        inputs["reshaped_input_sizes"].cpu(),
+    )
+    scores = outputs.iou_scores
+
+    if optimal:
+        # Get the best mask for each prediction
+        scores = scores.squeeze(0)  # Shape: [N, 3]
+        best_mask_indices = torch.argmax(scores, dim=1)  # Shape: [N]
+
+        # Select the best masks using the indices
+        masks = masks[0]  # Shape: [N, 3, H, W]
+        N, _, H, W = masks.shape
+        best_masks = torch.zeros((N, 1, H, W), device=masks.device)
+        for i in range(N):
+            best_masks[i, 0] = masks[i, best_mask_indices[i]]
+
+        # Get corresponding best scores
+        best_scores = torch.gather(scores, 1, best_mask_indices.unsqueeze(1)).squeeze(
+            1
+        )  # Shape: [N]
+
+        return best_masks, best_scores
+    else:
+        return masks, scores

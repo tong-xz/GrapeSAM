@@ -95,6 +95,11 @@ if __name__ == "__main__":
     dataloader = torch.utils.data.DataLoader(
         datasets, 1, shuffle=False, num_workers=1, pin_memory=False
     )
+
+    import pdb
+
+    pdb.set_trace()
+
     model = vgg19()
     device = torch.device("cuda")
     model.to(device)
@@ -110,8 +115,6 @@ if __name__ == "__main__":
             # Convert outputs to points
             pred_points, pred_points_score = convert_heatmap_to_points(outputs)
             # pred_points = argmax_points(outputs)
-
-            
 
             temp_minu = len(count[0]) - pred_points.shape[1]
             print(name, temp_minu, len(count[0]), pred_points.shape[1])
