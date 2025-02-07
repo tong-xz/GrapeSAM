@@ -47,14 +47,12 @@ def train_val(im_list, ratio=0.9):
     return train_list, val_list
 
 
-
 class Crowd(data.Dataset):
     def __init__(
         self,
         root_path,
         crop_size,
         downsample_ratio,
-        is_gray=False,
         method="train",
         resize=False,
         im_list=None,
@@ -77,20 +75,12 @@ class Crowd(data.Dataset):
         assert self.c_size % self.d_ratio == 0
         self.dc_size = self.c_size // self.d_ratio
 
-        if is_gray:
-            self.trans = transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                    transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
-                ]
-            )
-        else:
-            self.trans = transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-                ]
-            )
+        self.trans = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ]
+        )
 
     def __len__(self):
         return 1 * len(self.im_list)
@@ -104,7 +94,7 @@ class Crowd(data.Dataset):
         if self.method == "train":
             return self.train_transform_with_crop(img, keypoints)
         elif self.method == "val":
-            img, keypoints 
+            img, keypoints
             img = self.trans(img)
             name = os.path.basename(img_path).split(".")[0]
             if len(keypoints) == 0:

@@ -1,46 +1,98 @@
+# GrapeSAM  
 
-# GrapeSAM
-[Notion](https://www.notion.so/GrapeSAM-707c39118d9442ad9c33740ec8ce4456)
-[Sheet](https://docs.google.com/spreadsheets/d/1DM6vgAi5Fy2fUahmxdyjnrkGGhRGVAz7F3GxPt5ehOg/edit?gid=0#gid=0)
+**GrapeSAM** is a computer vision model designed for berry counting and grape segmentation tasks, leveraging advanced deep learning techniques.
 
+[toc]
 
-## Checkpoint Download
+---
+
+## 🚀 Installation  
+
+To download the pre-trained model from Hugging Face, run:  
 
 ```bash
 bash pretrain/download_huggingface.sh facebook/<model_name> <model_name>
 ```
-`model_name`: sam-vit-base, sam-vit-large, and sam-vit-huge
 
+Where `<model_name>` can be one of the following:  
+- `sam-vit-base`  
+- `sam-vit-large`  
+- `sam-vit-huge`  
 
+---
 
+## 📖 Getting Started  
 
-# Berry Counting 
+This repository provides scripts for **berry counting** and **grape segmentation**, with training and inference pipelines for each task.
 
-# Grape Cluster Segmentation
-## Mask2former
+---
 
-### Inference
+## 🍇 Berry Counting  
 
-`model/test_predictor.py` is the test of the predictor model. It will load the model and predict the output of the simulation image.
+### 🔥 Training  
 
-### Train
-
-if you want to train the mark2former model by vivid dataset, please uncomment the line 49 ` register_vivid_datasets()` in `model/mask2former/data/datasets/register_vivid_instance.py`
-
-### Demo 
-
-From image(s) to mask
+To train the model using point-based annotations, run:
 
 ```bash
-python model/mask2former_demo.py --input {image_path(s), split by space} --output {output_path or dir} --config-file config/coco/instance-segmentation/maskformer2_R50_bs16_50ep.yaml --opts MODEL.WEIGHTS {model_path}"
-```
-## Train
-```python
-python train.py --batch_size 4 --epoch_num 500 --sam_ckpt ./weights/sam_vit_h_4b8939.pth --wandb
+mkdir -p weights/point 
+python3 model/point/train.py \
+    --data-dir /home/xz/Dev/baseline-exp-playground/DATASET/vivid_processed \
+    --save-dir ../../weights/point \
+    --batch-size 32 \
+    --max-epoch 2000 \
+    --val-start 0 \
+    --val-epoch 1 
 ```
 
-## Eval
+### 🔍 Inference  
+
+(To be added: Include details on inference process and commands.)  
+
+---
+
+## 🍇 Grape Segmentation  
+
+🎭 Mask2Former  
+
+
+### 🔥 Training 
+
+To train the **Mask2Former** model using the **VIVID dataset**, modify the dataset registration script:  
+
+- Uncomment line **49** in `model/mask2former/data/datasets/register_vivid_instance.py`:  
+  
+  ```python
+  register_vivid_datasets()
+  ```
+
+### 🔍 Inference  
+
+Use `model/test_predictor.py` to load the model and predict segmentation outputs on simulation images.
+
+#### 🖼️ Demo: From Image(s) to Mask  
+
+Run the following command to generate segmentation masks from input images:  
 
 ```bash
-python3 eval_prompter.py --root_dir ./data/exp/ --ckp_path ./weights/vivid6/point_decoder_11-13-07\:37\:21.pth --vis
+python model/mask2former_demo.py \
+    --input {image_path(s), split by space} \
+    --output {output_path or dir} \
+    --config-file config/coco/instance-segmentation/maskformer2_R50_bs16_50ep.yaml \
+    --opts MODEL.WEIGHTS {model_path}
 ```
+
+---
+
+## 📝 License  
+
+(Include licensing details here.)
+
+---
+
+## 📜 Citation  
+
+If you use **GrapeSAM** in your research or application, please cite our work:  
+
+(To be added: Include the appropriate citation format.)  
+
+---
