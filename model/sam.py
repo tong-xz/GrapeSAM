@@ -11,9 +11,10 @@ from transformers.models.sam.modeling_sam import (
     SamVisionLayer,
     SamVisionConfig,
     SamVisionEncoderOutput,
+    SamImageSegmentationOutput,
 )
 from collections import OrderedDict
-from typing import Optional, Dict, Tuple, Union
+from typing import List, Optional, Dict, Tuple, Union
 from transformers.modeling_utils import load_state_dict
 from .adapter import ViTAdapters
 
@@ -37,7 +38,6 @@ class GSamModel(SamPreTrainedModel):
             config.prompt_encoder_config,
             self.shared_image_embedding,
         )
-        # breakpoint()
         self.mask_decoder = GSamMaskDecoder(config.mask_decoder_config)
 
         self.post_init()
@@ -61,6 +61,237 @@ class GSamModel(SamPreTrainedModel):
         return positional_embedding.permute(2, 0, 1).unsqueeze(
             0
         )  # channel x height x width
+
+    @torch.no_grad()
+    def get_image_embeddings(
+        self,
+        pixel_values,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ):
+        r"""
+        Returns the image embeddings by passing the pixel values through the vision encoder.
+
+        Args:
+            pixel_values (`torch.FloatTensor` of shape `(batch_size, num_channels, height, width)`):
+                Input pixel values
+            output_attentions (`bool`, *optional*):
+                Whether or not to return the attentions tensors of all attention layers.
+            output_hidden_states (`bool`, *optional*):
+                Whether or not to return the hidden states of all layers.
+            return_dict (`bool`, *optional*):
+                Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
+
+        """
+        vision_output = self.vision_encoder(
+            pixel_values,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+        )
+        image_embeddings = vision_output[0]
+        return image_embeddings
+
+    @torch.no_grad()
+    def get_prompt_embeddings(
+        self,
+        input_points: Optional[torch.FloatTensor] = None,
+        input_labels: Optional[torch.LongTensor] = None,
+        input_boxes: Optional[torch.FloatTensor] = None,
+        input_masks: Optional[torch.LongTensor] = None,
+    ):
+        r"""
+        Returns the prompt embeddings by passing the input points, labels, boxes and masks through the prompt encoder.
+
+        Args:
+            input_points (`torch.FloatTensor` of shape `(batch_size, point_batch_size, num_points_per_image, 2)`):
+                Optional input points for the prompt encoder. The padding of the point is automatically done by the
+                processor. `point_batch_size` refers to the number of masks that we want the model to predict per
+                point. The model will output `point_batch_size` times 3 masks in total.
+            input_labels (`torch.LongTensor` of shape `(batch_size, point_batch_size, num_points_per_image)`):
+                Optional input labels for the prompt encoder. The padding of the labels is automatically done by the
+                processor, or can be fed by the user.
+            input_boxes (`torch.FloatTensor` of shape `(batch_size, num_boxes_per_image, 4)`):
+                Optional input boxes for the prompt encoder. The padding of the boxes is automatically done by the
+                processor. users can also pass manually the input boxes.
+            input_masks (`torch.LongTensor` of shape `(batch_size, image_size, image_size)`):
+                Optional input masks for the prompt encoder.
+        """
+        prompt_output = self.prompt_encoder(
+            input_points=input_points,
+            input_labels=input_labels,
+            input_boxes=input_boxes,
+            input_masks=input_masks,
+        )
+        return prompt_output
+
+    def forward(
+        self,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        input_points: Optional[torch.FloatTensor] = None,
+        input_labels: Optional[torch.LongTensor] = None,
+        input_boxes: Optional[torch.FloatTensor] = None,
+        input_masks: Optional[torch.LongTensor] = None,
+        image_embeddings: Optional[torch.FloatTensor] = None,
+        multimask_output: bool = True,
+        attention_similarity: Optional[torch.FloatTensor] = None,
+        target_embedding: Optional[torch.FloatTensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+        **kwargs,
+    ) -> List[Dict[str, torch.Tensor]]:
+        r"""
+        Example:
+
+        ```python
+        >>> from PIL import Image
+        >>> import requests
+        >>> from transformers import AutoModel, AutoProcessor
+
+        >>> model = AutoModel.from_pretrained("facebook/sam-vit-base")
+        >>> processor = AutoProcessor.from_pretrained("facebook/sam-vit-base")
+
+        >>> img_url = "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/transformers/model_doc/sam-car.png"
+        >>> raw_image = Image.open(requests.get(img_url, stream=True).raw).convert("RGB")
+        >>> input_points = [[[400, 650]]]  # 2D location of a window on the car
+        >>> inputs = processor(images=raw_image, input_points=input_points, return_tensors="pt")
+
+        >>> # Get segmentation mask
+        >>> outputs = model(**inputs)
+
+        >>> # Postprocess masks
+        >>> masks = processor.post_process_masks(
+        ...     outputs.pred_masks, inputs["original_sizes"], inputs["reshaped_input_sizes"]
+        ... )
+        ```
+        """
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
+        )
+        output_hidden_states = (
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
+        )
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
+
+        if pixel_values is None and image_embeddings is None:
+            raise ValueError(
+                "Either pixel_values or image_embeddings must be provided."
+            )
+
+        if pixel_values is not None and image_embeddings is not None:
+            raise ValueError(
+                "Only one of pixel_values and image_embeddings can be provided."
+            )
+
+        if input_points is not None and len(input_points.shape) != 4:
+            raise ValueError(
+                "The input_points must be a 4D tensor. Of shape `batch_size`, `point_batch_size`, `nb_points_per_image`, `2`.",
+                " got {}.".format(input_points.shape),
+            )
+        if input_boxes is not None and len(input_boxes.shape) != 3:
+            raise ValueError(
+                "The input_points must be a 3D tensor. Of shape `batch_size`, `nb_boxes`, `4`.",
+                " got {}.".format(input_boxes.shape),
+            )
+        if input_points is not None and input_boxes is not None:
+            point_batch_size = input_points.shape[1]
+            box_batch_size = input_boxes.shape[1]
+            if point_batch_size != box_batch_size:
+                raise ValueError(
+                    "You should provide as many bounding boxes as input points per box. Got {} and {}.".format(
+                        point_batch_size, box_batch_size
+                    )
+                )
+
+        image_positional_embeddings = self.get_image_wide_positional_embeddings()
+        # repeat with batch size
+        batch_size = (
+            pixel_values.shape[0]
+            if pixel_values is not None
+            else image_embeddings.shape[0]
+        )
+        image_positional_embeddings = image_positional_embeddings.repeat(
+            batch_size, 1, 1, 1
+        )
+
+        vision_attentions = None
+        vision_hidden_states = None
+
+        if pixel_values is not None:
+            vision_outputs = self.vision_encoder(
+                pixel_values,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+            )
+            image_embeddings = vision_outputs[0]
+
+            if output_hidden_states:
+                vision_hidden_states = vision_outputs[1]
+            if output_attentions:
+                vision_attentions = vision_outputs[-1]
+
+        if input_points is not None and input_labels is None:
+            input_labels = torch.ones_like(
+                input_points[:, :, :, 0], dtype=torch.int, device=input_points.device
+            )
+
+        if (
+            input_points is not None
+            and image_embeddings.shape[0] != input_points.shape[0]
+        ):
+            raise ValueError(
+                "The batch size of the image embeddings and the input points must be the same. ",
+                "Got {} and {} respectively.".format(
+                    image_embeddings.shape[0], input_points.shape[0]
+                ),
+                " if you want to pass multiple points for the same image, make sure that you passed ",
+                " input_points of shape (batch_size, point_batch_size, num_points_per_image, 3) and ",
+                " input_labels of shape (batch_size, point_batch_size, num_points_per_image)",
+            )
+
+        sparse_embeddings, dense_embeddings = self.prompt_encoder(
+            input_points=input_points,
+            input_labels=input_labels,
+            input_boxes=input_boxes,
+            input_masks=input_masks,
+        )
+
+        low_res_masks, iou_predictions, mask_decoder_attentions = self.mask_decoder(
+            image_embeddings=image_embeddings,
+            image_positional_embeddings=image_positional_embeddings,
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output=multimask_output,
+            attention_similarity=attention_similarity,
+            target_embedding=target_embedding,
+            output_attentions=output_attentions,
+        )
+
+        if not return_dict:
+            output = (iou_predictions, low_res_masks)
+            if output_hidden_states:
+                output = output + (vision_hidden_states,)
+
+            if output_attentions:
+                output = output + (vision_attentions, mask_decoder_attentions)
+            return output
+
+        return SamImageSegmentationOutput(
+            iou_scores=iou_predictions,
+            pred_masks=low_res_masks,
+            vision_hidden_states=vision_hidden_states,
+            vision_attentions=vision_attentions,
+            mask_decoder_attentions=mask_decoder_attentions,
+        )
 
 
 class GSamVisionEncoder(SamVisionEncoder):

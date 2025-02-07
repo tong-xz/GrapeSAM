@@ -1,5 +1,5 @@
 data/
-!model/mask2former/data
+!model/mask/mask2former/data
 *.pyc
 __pycache__/
 model/__pycache__/

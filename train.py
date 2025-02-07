@@ -21,8 +21,8 @@ from detectron2.data.detection_utils import read_image
 from detectron2.projects.deeplab import add_deeplab_config
 from detectron2.utils.logger import setup_logger
 
-from model.mask2former import add_maskformer2_config
-from model.predictor import Mask2FormerRunner
+from model.mask.mask2former import add_maskformer2_config
+from model.mask.predictor import Mask2FormerRunner
 
 class TrainerLightning(pl.LightningModule):
     def __init__(self, config, devices="cpu"):

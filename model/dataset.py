@@ -11,7 +11,7 @@ import torch
 # import albumentations as A
 import cv2
 from torch.utils.data import DataLoader
-from .utils import visualize_img_and_heatmap, visualize_quadrants
+# from .utils import visualize_img_and_heatmap, visualize_quadrants
 
 # from .util import restore_image_from_quadrants, visualize_restored_image
 

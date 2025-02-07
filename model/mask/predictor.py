@@ -36,7 +36,7 @@ from detectron2.projects.deeplab import add_deeplab_config, build_lr_scheduler
 from detectron2.solver.build import maybe_add_gradient_clipping
 
 # MaskFormer
-from model.mask2former import (
+from model.mask.mask2former import (
     COCOInstanceNewBaselineDatasetMapper,
     COCOPanopticNewBaselineDatasetMapper,
     InstanceSegEvaluator,
@@ -374,7 +374,6 @@ class Mask2FormerRunner(object):
                 for index in range(len(instances)):
                     score = instances[index].scores[0]
                     if score > 0.75:
-                        print(instances.pred_masks.shape)
                         mask = torch.squeeze(instances[index].pred_masks).numpy() * 255
                         import numpy as np
 
@@ -400,14 +399,14 @@ class Mask2FormerRunner(object):
                         else:
                             instances_ = Instances.cat([instances_, instances[index]])
                             masks = torch.cat((masks, mask), 0)
-                            print(masks.shape)
                         instances_.pred_masks = masks
 
                 vis_output = visualizer.draw_instance_predictions(
                     predictions=instances_
                 )
 
-        return predictions, vis_output
+        # this masks the instance seg results. torch.Size([n_instance, height, width])
+        return masks, vis_output
 
     def _frame_from_video(self, video):
         while video.isOpened():
