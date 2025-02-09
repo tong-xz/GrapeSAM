@@ -111,7 +111,7 @@ def sam_points_inference(
 
 class PointModel:
     def __init__(self, model_path, device="cuda"):
-        self.model = vgg19().to(device)
+        self.model = vgg19().eval().to(device)
         self.model.load_state_dict(torch.load(model_path, device)["model_state_dict"])
         self.device = device
 

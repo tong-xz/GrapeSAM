@@ -257,18 +257,6 @@ import numpy as np
 import torch
 
 
-def show_mask(mask, ax, random_color=False, color=None, alpha=0.6):
-    if random_color:
-        color = np.concatenate([np.random.random(3), np.array([alpha])], axis=0)
-    elif color is not None:
-        color = np.array(list(color) + [alpha])
-    else:
-        color = np.array([30 / 255, 144 / 255, 255 / 255, alpha])
-    h, w = mask.shape[-2:]
-    mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
-    ax.imshow(mask_image)
-
-
 def show_box(box, ax):
     x0, y0 = box[0], box[1]
     w, h = box[2] - box[0], box[3] - box[1]
@@ -352,34 +340,68 @@ def show_points(coords, labels, ax, marker_size=375):
     )
 
 
+# Use Agg backend for faster rendering (disable interactive mode)
+plt.switch_backend("Agg")
+
+
+def show_mask(mask, ax, random_color=False, color=None, alpha=0.6):
+    """Apply a colored mask overlay on the image."""
+    if random_color:
+        color = np.random.rand(3)  # Generate random RGB values
+    elif color is not None:
+        color = np.array(color)  # Convert color tuple to numpy array
+    else:
+        color = np.array([30 / 255, 144 / 255, 255 / 255])  # Default blue color
+
+    mask_image = np.zeros(
+        (*mask.shape[-2:], 4), dtype=np.float32
+    )  # Pre-allocate memory
+    mask_image[..., :3] = mask[..., None] * color  # Apply color
+    mask_image[..., 3] = mask * alpha  # Apply transparency
+
+    ax.imshow(mask_image, interpolation="nearest", alpha=alpha)
+
+
 def show_masks_on_image(
     raw_image, masks, title=None, alpha=0.6, show_background=True, save_path=None
 ):
-    # Handle single mask case
-    if len(masks.shape) == 4:
-        masks = masks.squeeze()
-    if len(masks.shape) == 2:  # Single mask
-        masks = masks[None, ...]  # Add batch dimension
+    """
+    Optimized function to overlay segmentation masks on an image.
+    """
 
-    # Create a single subplot
-    plt.figure(figsize=(10, 10))
+    # Convert masks to NumPy if it's a PyTorch tensor
+    if torch.is_tensor(masks):
+        masks = masks.cpu().numpy()
 
-    # Only show the background image if show_background is True
+    # Ensure masks are at least 3D (batch dimension)
+    masks = np.atleast_3d(masks)
+
+    # Pre-create figure and axis
+    fig, ax = plt.subplots(figsize=(10, 10), dpi=80)  # Set DPI for faster rendering
+
+    # Display background image only once
     if show_background:
-        plt.imshow(np.array(raw_image))
+        ax.imshow(raw_image, interpolation="nearest")
 
-    # Show all masks on the same image with random colors
+    # Vectorized mask overlay
     for mask in masks:
-        mask = mask.cpu().detach()
-        show_mask(mask, plt.gca(), random_color=True, alpha=alpha)
+        show_mask(mask, ax, random_color=True, alpha=alpha)
 
-    plt.title(title)
-    plt.axis("off")
+    if title:
+        ax.set_title(title, fontsize=14)
 
+    ax.axis("off")
+
+    # Save or show image
     if save_path is not None:
-        plt.savefig(os.path.join(save_path, f"{title}.png"))
+        save_file = os.path.join(save_path, f"{title}.png")
+        fig.savefig(
+            save_file, bbox_inches="tight", pad_inches=0.1, dpi=100
+        )  # Optimized saving
     else:
         plt.show()
+
+    plt.close(fig)  # Close figure immediately to free memory
 
 
 # TODO need to modify
