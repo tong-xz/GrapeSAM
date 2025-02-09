@@ -351,7 +351,9 @@ def show_points(coords, labels, ax, marker_size=375):
     )
 
 
-def show_masks_on_image(raw_image, masks, title=None, alpha=0.6, show_background=True):
+def show_masks_on_image(
+    raw_image, masks, title=None, alpha=0.6, show_background=True, save_fig=False
+):
     # Handle single mask case
     if len(masks.shape) == 4:
         masks = masks.squeeze()
@@ -372,8 +374,11 @@ def show_masks_on_image(raw_image, masks, title=None, alpha=0.6, show_background
 
     plt.title(title)
     plt.axis("off")
-    plt.savefig(f"{title}.png")
-    plt.show()
+
+    if save_fig:
+        plt.savefig(f"{title}.png")
+    else:
+        plt.show()
 
 
 # TODO need to modify
@@ -471,10 +476,14 @@ class ResizeLongestSide:
         """
         Expects a numpy array with shape HxWxC in uint8 format.
         """
-        target_size = self.get_preprocess_shape(image.shape[0], image.shape[1], self.target_length)
+        target_size = self.get_preprocess_shape(
+            image.shape[0], image.shape[1], self.target_length
+        )
         return np.array(resize(to_pil_image(image), target_size))
 
-    def apply_coords(self, coords: np.ndarray, original_size: Tuple[int, ...]) -> np.ndarray:
+    def apply_coords(
+        self, coords: np.ndarray, original_size: Tuple[int, ...]
+    ) -> np.ndarray:
         """
         Expects a numpy array of length 2 in the final dimension. Requires the
         original image size in (H, W) format.
@@ -488,7 +497,9 @@ class ResizeLongestSide:
         coords[..., 1] = coords[..., 1] * (new_h / old_h)
         return coords
 
-    def apply_boxes(self, boxes: np.ndarray, original_size: Tuple[int, ...]) -> np.ndarray:
+    def apply_boxes(
+        self, boxes: np.ndarray, original_size: Tuple[int, ...]
+    ) -> np.ndarray:
         """
         Expects a numpy array shape Bx4. Requires the original image size
         in (H, W) format.
@@ -503,7 +514,9 @@ class ResizeLongestSide:
         the transformation expected by the model.
         """
         # Expects an image in BCHW format. May not exactly match apply_image.
-        target_size = self.get_preprocess_shape(image.shape[2], image.shape[3], self.target_length)
+        target_size = self.get_preprocess_shape(
+            image.shape[2], image.shape[3], self.target_length
+        )
         return F.interpolate(
             image, target_size, mode="bilinear", align_corners=False, antialias=True
         )
@@ -535,7 +548,9 @@ class ResizeLongestSide:
         return boxes.reshape(-1, 4)
 
     @staticmethod
-    def get_preprocess_shape(oldh: int, oldw: int, long_side_length: int) -> Tuple[int, int]:
+    def get_preprocess_shape(
+        oldh: int, oldw: int, long_side_length: int
+    ) -> Tuple[int, int]:
         """
         Compute the output size given input size and target long side length.
         """
@@ -544,4 +559,3 @@ class ResizeLongestSide:
         neww = int(neww + 0.5)
         newh = int(newh + 0.5)
         return (newh, neww)
-    
