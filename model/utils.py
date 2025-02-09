@@ -7,6 +7,7 @@ import math
 from typing import Optional, Tuple, Any, List
 from torch import Tensor
 import yaml
+import os
 
 
 def load_config(config_path):
@@ -352,7 +353,7 @@ def show_points(coords, labels, ax, marker_size=375):
 
 
 def show_masks_on_image(
-    raw_image, masks, title=None, alpha=0.6, show_background=True, save_fig=False
+    raw_image, masks, title=None, alpha=0.6, show_background=True, save_path=None
 ):
     # Handle single mask case
     if len(masks.shape) == 4:
@@ -375,8 +376,8 @@ def show_masks_on_image(
     plt.title(title)
     plt.axis("off")
 
-    if save_fig:
-        plt.savefig(f"{title}.png")
+    if save_path is not None:
+        plt.savefig(os.path.join(save_path, f"{title}.png"))
     else:
         plt.show()
 

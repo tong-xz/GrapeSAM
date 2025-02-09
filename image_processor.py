@@ -4,6 +4,20 @@ from PIL import Image
 import random
 from tqdm import tqdm
 
+"""
+A Python script for converting HEIC/HEIF image files to other common formats like PNG or JPEG.
+
+This script provides functionality to:
+- Convert individual HEIC/HEIF images to other formats
+- Process entire folders of HEIC/HEIF images
+- Handle duplicate filenames with random number suffixes
+- Track conversion progress with a progress bar
+
+Usage:
+    python image_processor.py --input-folder /path/to/heic/files --output-folder /path/to/output [--format png|jpg|jpeg]
+
+"""
+
 
 def convert_heic_imgs(input_path, output_path, output_format="png"):
     """
