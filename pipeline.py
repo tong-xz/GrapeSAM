@@ -17,12 +17,20 @@ from model.mask.mask2former import add_maskformer2_config
 from model.mask.predictor import Mask2FormerRunner
 
 
-print(f"Using GPU: {os.environ.get('CUDA_VISIBLE_DEVICES', 'All')}")
-
-
 class GrapePipeline:
     def __init__(self, point_model_path, img_save_path) -> None:
+        """Initialize the grape detection pipeline with required models and configurations.
+
+        Args:
+            point_model_path (str): Path to the pretrained point detection model checkpoint
+            img_save_path (str): Directory path where output images will be saved
+        """
+        # Print device information at initialization
+        self._print_device_info()
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"\nInitializing models on: {self.device}")
+
         self.sam_model = SamModel.from_pretrained("facebook/sam-vit-huge").to(
             self.device
         )
@@ -60,12 +68,51 @@ class GrapePipeline:
         # cfg.freeze()
         # self.mask2former = Mask2FormerRunner(cfg)
 
-    def _resize_img(self, img_path):
-        """
-        resize image to the target reshape size of sam processor
-        return pil format
-        """
+    @staticmethod
+    def _print_device_info():
+        """Print detailed information about the computing device (GPU/CPU) being used."""
+        print("\n=== Device Information ===")
 
+        # Check CUDA availability and visible devices
+        print(f"CUDA Available: {torch.cuda.is_available()}")
+        print(f"Using GPU: {os.environ.get('CUDA_VISIBLE_DEVICES', 'All')}")
+
+        # Get the current device
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"Current device: {device}")
+
+        if device.type == "cuda":
+            for i in range(torch.cuda.device_count()):
+                props = torch.cuda.get_device_properties(i)
+                print(f"\nGPU {i}: {props.name}")
+                print(
+                    f"  Memory: {props.total_memory/1024**3:.1f}GB total, "
+                    f"{torch.cuda.memory_allocated(i)/1024**3:.1f}GB used, "
+                    f"{torch.cuda.memory_reserved(i)/1024**3:.1f}GB cached"
+                )
+                print(f"  CUDA: {props.major}.{props.minor}")
+        else:
+            import platform, psutil
+
+            print("\nCPU Info:")
+            print(f"  {platform.processor()}")
+            print(
+                f"  Cores: {psutil.cpu_count(logical=False)} physical, {psutil.cpu_count()} total"
+            )
+            print(
+                f"  Memory: {psutil.virtual_memory().total/1024**3:.1f}GB total, "
+                f"{psutil.virtual_memory().available/1024**3:.1f}GB free"
+            )
+
+    def _resize_img(self, img_path):
+        """Resize input image to match SAM processor's target dimensions.
+
+        Args:
+            img_path (str): Path to the input image file
+
+        Returns:
+            PIL.Image: Resized image in PIL format matching SAM's required dimensions
+        """
         raw_img = Image.open(img_path).convert("RGB")
         inputs = self.sam_processor(images=raw_img, return_tensors="pt").to("cuda")
         target_shape = inputs["reshaped_input_sizes"][0]
@@ -81,10 +128,30 @@ class GrapePipeline:
             )
         return raw_img
 
-    def segment_grape_cluster(self, img_path): ...
+    def segment_grape_cluster(self, img_path):
+        """Segment grape clusters in the input image.
+
+        Args:
+            img_path (str): Path to the input image file
+
+        Returns:
+            tuple: Segmentation results for grape clusters (implementation pending)
+        """
+        ...
 
     # add everything mode to post processing mask
     def segment_berry(self, img_path):
+        """Segment individual berries in a grape image using point detection model and SAM.
+
+        Args:
+            img_path (str): Path to the input image file
+
+        Returns:
+            tuple: A tuple containing:
+                - PIL.Image: The original input image
+                - torch.Tensor: Binary masks for detected berries (N x 1 x H x W)
+                - torch.Tensor: Confidence scores for each detected berry mask
+        """
         best_masks_cpu = None
         best_scores_cpu = None
 
@@ -116,6 +183,18 @@ class GrapePipeline:
         return img, best_masks_cpu, best_scores_cpu
 
     def segment_everything(self, img_path, points_per_batch=256):
+        """Generate segmentation masks for all objects in the image using SAM.
+
+        Args:
+            img_path (str): Path to the input image file
+            points_per_batch (int, optional): Number of points to process per batch. Defaults to 256.
+
+        Returns:
+            tuple: A tuple containing:
+                - PIL.Image: The resized input image
+                - torch.Tensor: Binary masks for all detected objects (N x 1 x H x W)
+                - torch.Tensor: Confidence scores for each mask
+        """
         resized_img = self._resize_img(img_path)
         everything_masks_cpu = None
         everything_scores_cpu = None
@@ -143,10 +222,28 @@ class GrapePipeline:
             gc.collect()
         return resized_img, everything_masks_cpu, everything_scores_cpu
 
-    def process_folder(self, input_folder, format):
+    def post_process_berries(m_cluster, m_berry, m_everything):
+        """Post-process berry segmentation masks using cluster and everything masks.
+
+        Args:
+            m_cluster (torch.Tensor): Grape cluster segmentation masks
+            m_berry (torch.Tensor): Berry segmentation masks
+            m_everything (torch.Tensor): Everything segmentation masks
+
+        Returns:
+            torch.Tensor: Filtered and refined berry segmentation masks
         """
-        Main entrance for the pipeline.
-        Process all images in the input folder and save the results in the output folder.
+        # s1 filter out
+
+        # s2 superset
+        ...
+
+    def process_folder(self, input_folder, format):
+        """Process all images in the input folder through the grape detection pipeline.
+
+        Args:
+            input_folder (str): Path to the folder containing input images
+            format (str or list): File extension(s) of images to process (e.g., 'png', ['jpg', 'jpeg'])
         """
         # Get list of files with matching format first
         image_files = [f for f in os.listdir(input_folder) if f.endswith(tuple(format))]
@@ -157,7 +254,14 @@ class GrapePipeline:
 
         for i, filename in enumerate(image_files):
             # Get memory usage before processing
-            mem_before = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
+            if self.device.type == "cuda":
+                mem_before = (
+                    torch.cuda.memory_allocated() / 1024 / 1024 / 1024
+                )  # Convert to GB
+            else:
+                mem_before = (
+                    process.memory_info().rss / 1024 / 1024 / 1024
+                )  # Convert to GB
 
             img_path = os.path.join(input_folder, filename)
 
@@ -171,7 +275,7 @@ class GrapePipeline:
             )
             # print(berry_masks_cpu.shape, everything_masks_cpu.shape)
 
-            utils.show_masks_on_image(
+            show_masks_on_image(
                 img,
                 berry_masks_cpu,
                 title=berry_img_title,
@@ -187,10 +291,22 @@ class GrapePipeline:
             # save predicted berry masks
 
             # Update progress bar with memory info
-            mem_after = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
-            mem_change = mem_after - mem_before
+            if self.device.type == "cuda":
+                used_memory = torch.cuda.memory_allocated() / 1024 / 1024 / 1024  # GB
+                total_memory = (
+                    torch.cuda.get_device_properties(0).total_memory
+                    / 1024
+                    / 1024
+                    / 1024
+                )
+            else:
+                used_memory = process.memory_info().rss / 1024 / 1024 / 1024
+                total_memory = psutil.virtual_memory().total / 1024 / 1024 / 1024
+
             pbar.set_postfix(
-                {"Memory": f"{mem_after:.2f}GB", "Δ": f"{mem_change:+.2f}GB"}
+                {
+                    "Mem": f"{used_memory:.1f}/{total_memory:.1f}GB ({used_memory/total_memory:.1%})"
+                }
             )
             pbar.update(1)
 

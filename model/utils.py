@@ -379,7 +379,9 @@ def show_masks_on_image(
     masks = np.atleast_3d(masks)
 
     # Pre-create figure and axis
-    fig, ax = plt.subplots(figsize=(10, 10), dpi=80)  # Set DPI for faster rendering
+    fig, ax = plt.subplots(
+        figsize=(10, 10), dpi=300
+    )  # Increased DPI for publication quality
 
     # Display background image only once
     if show_background:
