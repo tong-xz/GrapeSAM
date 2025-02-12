@@ -16,7 +16,6 @@ from transformers.models.sam.modeling_sam import (
 from collections import OrderedDict
 from typing import List, Optional, Dict, Tuple, Union
 from transformers.modeling_utils import load_state_dict
-from .adapter import ViTAdapters
 
 
 """
@@ -530,11 +529,19 @@ def predict_by_points(
     with torch.no_grad():
         outputs = model(**inputs, multimask_output=multimask_output)
 
-    masks = processor.image_processor.post_process_masks(
-        outputs.pred_masks.cpu(),
-        inputs["original_sizes"].cpu(),
-        inputs["reshaped_input_sizes"].cpu(),
-    )
+        # change masks to original size
+        # masks = processor.image_processor.post_process_masks(
+        #     outputs.pred_masks.cpu(),
+        #     inputs["original_sizes"].cpu(),
+        #     inputs["reshaped_input_sizes"].cpu(),
+        # )
+
+        # not change masks to original size
+        masks = processor.image_processor.post_process_masks(
+            outputs.pred_masks.cpu(),
+            inputs["reshaped_input_sizes"].cpu(),
+            inputs["reshaped_input_sizes"].cpu(),
+        )
     scores = outputs.iou_scores
 
     if optimal:

@@ -8,6 +8,8 @@ from typing import Optional, Tuple, Any, List
 from torch import Tensor
 import yaml
 import os
+from PIL import Image
+import gc
 
 
 def load_config(config_path):
@@ -384,8 +386,16 @@ def show_masks_on_image(
         ax.imshow(raw_image, interpolation="nearest")
 
     # Vectorized mask overlay
-    for mask in masks:
-        show_mask(mask, ax, random_color=True, alpha=alpha)
+    # for mask in masks:
+    #     show_mask(mask, ax, random_color=True, alpha=alpha)
+
+    batch_size = 10
+    for i in range(0, len(masks), batch_size):
+        batch_masks = masks[i : i + batch_size]
+        for mask in batch_masks:
+            show_mask(mask, ax=ax, random_color=True, alpha=alpha)
+
+        del batch_masks
 
     if title:
         ax.set_title(title, fontsize=14)
@@ -402,6 +412,29 @@ def show_masks_on_image(
         plt.show()
 
     plt.close(fig)  # Close figure immediately to free memory
+
+
+def show_masks_on_image0(raw_image, masks, output_path):
+    plt.figure(figsize=(10, 10))
+    plt.imshow(np.array(raw_image))
+    ax = plt.gca()
+    ax.set_autoscale_on(False)
+
+    # Process masks in smaller batches
+    batch_size = 10
+    for i in range(0, len(masks), batch_size):
+        batch_masks = masks[i : i + batch_size]
+        for mask in batch_masks:
+            show_mask(mask, ax=ax, random_color=True)
+
+        del batch_masks
+        torch.cuda.empty_cache() if torch.cuda.is_available() else None
+        gc.collect()
+
+    plt.axis("off")
+    plt.savefig(output_path)
+    plt.close()
+    gc.collect()
 
 
 # TODO need to modify

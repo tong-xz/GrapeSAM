@@ -127,7 +127,7 @@ def show_masks_on_image(raw_image, masks, scores=None, title=None, transparency=
     ]
 
     # Show all masks on the same image with bright colors
-    for i, (mask, score) in enumerate(zip(masks, scores)):
+    for i, mask in enumerate(masks):
         mask = mask.cpu().detach()
         color = BRIGHT_COLORS[i % len(BRIGHT_COLORS)] + [transparency]
         show_mask(mask, plt.gca(), random_color=False, color=color)

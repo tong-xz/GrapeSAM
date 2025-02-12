@@ -5,8 +5,6 @@ import torch
 from transformers import SamModel, SamProcessor
 
 
-
-
 ckpt_path = "/home/xz/Dev/baseline-exp-playground/GeneralizedLoss-Counting-Pytorch/output/0203-202057/best_val.pth"
 img_path = "/home/xz/Dev/GrapeSAM/data/exp/imgs/25A_back_grape_jpg.png"
 save_name = "0203"
@@ -42,6 +40,10 @@ best_masks, best_scores = sam.predict_by_points(
     optimal=True,
     multimask_output=True,
 )
+
+import pdb
+
+pdb.set_trace()
 print(best_masks.shape)
 
 utils.show_masks_on_image(
