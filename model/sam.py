@@ -539,8 +539,10 @@ def predict_by_points(
         # not change masks to original size
         masks = processor.image_processor.post_process_masks(
             outputs.pred_masks.cpu(),
-            inputs["reshaped_input_sizes"].cpu(),
-            inputs["reshaped_input_sizes"].cpu(),
+            # inputs["reshaped_input_sizes"].cpu(),
+            # inputs["reshaped_input_sizes"].cpu(),
+            inputs["original_sizes"],
+            inputs["original_sizes"],
         )
     scores = outputs.iou_scores
 
@@ -560,7 +562,6 @@ def predict_by_points(
         best_scores = torch.gather(scores, 1, best_mask_indices.unsqueeze(1)).squeeze(
             1
         )  # Shape: [N]
-
         return best_masks, best_scores
     else:
         return masks, scores

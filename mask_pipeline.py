@@ -229,25 +229,32 @@ if __name__ == "__main__":
     cnt = 0
     print("dataset:", len(vivid_exp_dataset))
     for img_path, bboxes, gt_masks in tqdm(vivid_exp_dataset):
-        pred_masks = mask_pipeline(img_path)
-        preds = [
-            dict(
-                masks=pred_masks.any(dim=0).unsqueeze(0),
-                scores=torch.tensor([1.0]),
-                labels=torch.tensor([0]),
-            )
-        ]
+        try:
+          
+            pred_masks = mask_pipeline(img_path)
+            if pred_masks == None:
+                continue
+            preds = [
+                dict(
+                    masks=pred_masks.any(dim=0).unsqueeze(0),
+                    scores=torch.tensor([1.0]),
+                    labels=torch.tensor([0]),
+                )
+            ]
 
-        gts = [
-            dict(
-                masks=torch.tensor(gt_masks).type(torch.bool).any(dim=0).unsqueeze(0),
-                labels=torch.tensor([0]),
-            )
-        ]
-        metric.update(preds, gts)
-        cnt += 1
-        if cnt == 100:
-            break
+            gts = [
+                dict(
+                    masks=torch.tensor(gt_masks).type(torch.bool).any(dim=0).unsqueeze(0),
+                    labels=torch.tensor([0]),
+                )
+            ]
+            metric.update(preds, gts)
+            cnt += 1
+            if cnt == 100:
+                break
+        except Exception as e:
+            print(e)
+            continue
 
     result = metric.compute()
     print("AP:", result)

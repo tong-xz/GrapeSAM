@@ -1,4 +1,6 @@
 data/
+test/
+checkpoints
 !model/mask/mask2former/data
 *.pyc
 __pycache__/
