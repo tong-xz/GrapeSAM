@@ -5,7 +5,7 @@ import bisect
 import multiprocessing as mp
 from collections import deque, OrderedDict
 from typing import Any, Dict, List, Set
-
+import numpy as np
 import cv2
 import torch
 import copy
@@ -371,12 +371,11 @@ class Mask2FormerRunner(object):
                 instances = predictions["instances"].to(self.cpu_device)
                 instances_ = Instances(instances.image_size)
                 flag = False
+                masks = None
                 for index in range(len(instances)):
                     score = instances[index].scores[0]
                     if score > 0.75:
                         mask = torch.squeeze(instances[index].pred_masks).numpy() * 255
-                        import numpy as np
-
                         mask = np.array(mask, np.uint8)
                         contours, hierachy = cv2.findContours(
                             mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE

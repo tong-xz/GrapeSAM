@@ -15,10 +15,18 @@ from detectron2.config import get_cfg
 from detectron2.projects.deeplab import add_deeplab_config
 from model.mask.mask2former import add_maskformer2_config
 from model.mask.predictor import Mask2FormerRunner
+import torchshow
 
 
 class GrapePipeline:
-    def __init__(self, point_model_path, img_save_path) -> None:
+    def __init__(
+        self,
+        point_model_path,
+        mask_ckpt,
+        img_save_path,
+        mask_cfg="config/coco/instance-segmentation/maskformer2_R50_bs16_50ep.yaml",
+        sam_from_pretrained="facebook/sam-vit-huge",
+    ) -> None:
         """Initialize the grape detection pipeline with required models and configurations.
 
         Args:
@@ -31,10 +39,8 @@ class GrapePipeline:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"\nInitializing models on: {self.device}")
 
-        self.sam_model = SamModel.from_pretrained("facebook/sam-vit-huge").to(
-            self.device
-        )
-        self.sam_processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
+        self.sam_model = SamModel.from_pretrained(sam_from_pretrained).to(self.device)
+        self.sam_processor = SamProcessor.from_pretrained(sam_from_pretrained)
         self.generator = pipeline(
             "mask-generation",
             model="facebook/sam-vit-huge",
@@ -55,21 +61,13 @@ class GrapePipeline:
             os.makedirs(img_save_path)
 
         # grape cluster part
-        # self.cfg = load_config("config/prompter_aruix.yaml")
-        # cfg = get_cfg()
-        # add_deeplab_config(cfg)
-        # add_maskformer2_config(cfg)
-        # cfg.merge_from_file(
-        #     "config/coco/instance-segmentation/maskformer2_R50_bs16_50ep.yaml"
-        # )
-        # cfg.merge_from_list(
-        #     [
-        #         "MODEL.WEIGHTS",
-        #         "/data/Hypothesis/proposition/Mask2Former/output/model_final.pth",
-        #     ]
-        # )
-        # cfg.freeze()
-        # self.mask2former = Mask2FormerRunner(cfg)
+        cfg = get_cfg()
+        add_deeplab_config(cfg)
+        add_maskformer2_config(cfg)
+        cfg.merge_from_file(mask_cfg)
+        cfg.merge_from_list(["MODEL.WEIGHTS", mask_ckpt])
+        cfg.freeze()
+        self.mask2former = Mask2FormerRunner(cfg)
 
     @staticmethod
     def _print_device_info():
@@ -140,7 +138,15 @@ class GrapePipeline:
         Returns:
             tuple: Segmentation results for grape clusters (implementation pending)
         """
-        ...
+        with open(img_path, "rb") as f:
+            image = Image.open(f)
+            mask2former_img = np.array(image)[:, :, ::-1]  # mask2former need BGR
+
+        mask_instance, visualized_output = self.mask2former.run_on_image(
+            mask2former_img
+        )
+
+        return mask_instance
 
     def segment_berry(self, img_path):
         """Segment individual berries in a grape image using point detection model and SAM.
@@ -224,6 +230,47 @@ class GrapePipeline:
             gc.collect()
         return resized_img, everything_masks_cpu, everything_scores_cpu
 
+    def _group_small_masks_by_instance(self, large_masks, small_masks, threshold=0.5):
+        """
+        Groups small masks based on their overlap with large masks.
+
+        Args:
+            large_masks (torch.Tensor): A tensor of shape (N, H, W), where N is the number of large masks.
+            small_masks (torch.Tensor): A tensor of shape (M, H, W), where M is the number of small masks.
+            threshold (float): A float between 0 and 1, representing the minimum overlap percentage required for a small mask to be considered valid.
+
+        Returns:
+            list of lists: A list of N lists, where each sublist contains small masks that overlap with the corresponding large mask instance.
+        """
+
+        # Initialize a list of N empty lists (one for each large mask instance)
+        grouped_masks = [[] for _ in range(large_masks.shape[0])]
+
+        # Iterate over each small mask
+        for j in range(small_masks.shape[0]):  # M small masks
+            small_mask = small_masks[j]
+
+            # Compute the overlap with all large masks (N masks)
+            for i in range(large_masks.shape[0]):  # N large masks
+                large_mask = large_masks[i]
+
+                # Calculate overlap by element-wise multiplication
+                overlap = large_mask * small_mask  # (H, W)
+
+                # Calculate the percentage of overlap
+                overlap_area = (
+                    overlap.sum().item()
+                )  # Sum of non-zero elements in the overlap
+                total_area = small_mask.sum()  # Total number of elements (H * W)
+                overlap_percentage = overlap_area / total_area
+
+                # If the overlap percentage is above the threshold, group this small mask with the large mask instance
+                if overlap_percentage >= threshold:
+                    grouped_masks[i].append(small_mask)
+                    break  # We found the large mask instance for this small mask, no need to check other large masks
+
+        return grouped_masks
+
     def post_process_berries(m_cluster, m_berry, m_everything):
         """Post-process berry segmentation masks using cluster and everything masks.
 
@@ -284,7 +331,19 @@ class GrapePipeline:
             )
 
             # Step 2: get grape cluster mask set M3
+            mask_instance = self.segment_grape_cluster(img_path)
+            if mask_instance is not None:
+                grouped_masks = self.group_small_masks_by_instance(
+                    mask_instance, berry_masks_cpu.squeeze(1), 0.5
+                )
 
+                torchshow.save(
+                    torch.stack([i * 2 for i in grouped_masks])
+                    .type(torch.bool)
+                    .any(dim=0)
+                    .unsqueeze(0),
+                    "filter.png",
+                )
             # STep 3: Use M3 as filter to remove outlier masks in M1, M2
 
             # save predicted berry masks
@@ -314,7 +373,19 @@ def main():
         "--point-ckpt",
         type=str,
         required=True,
-        help="Path to the point modelcheckpoint file",
+        help="Path to the point model checkpoint file",
+    )
+    parser.add_argument(
+        "--mask-ckpt",
+        type=str,
+        required=True,
+        help="Path to the mask model checkpoint file",
+    )
+    parser.add_argument(
+        "--sam-pth",
+        type=str,
+        default="facebook/sam-vit-huge",
+        help="Path/name to the sam model checkpoint file",
     )
     parser.add_argument(
         "--input", type=str, required=True, help="Path to the input image folder"
@@ -332,8 +403,7 @@ def main():
     args = parser.parse_args()
 
     grape_pipeline = GrapePipeline(
-        args.point_ckpt,
-        args.output,
+        args.point_ckpt, args.mask_ckpt, args.output, sam_from_pretrained=args.sam_pth
     )
     grape_pipeline.process_folder(args.input, args.format)
 
@@ -343,5 +413,6 @@ python3 pipeline.py --point-ckpt /home/xz/Dev/baseline-exp-playground/Generalize
 --input /home/xz/Downloads/feb-test/converted/ \
 --output /home/xz/Downloads/feb-test/converted/berry/
 """
+
 if __name__ == "__main__":
     main()
