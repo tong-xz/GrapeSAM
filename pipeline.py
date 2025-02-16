@@ -271,7 +271,7 @@ class GrapePipeline:
 
         return grouped_masks
 
-    def post_process_berries(m_cluster, m_berry, m_everything):
+    def union_berries(m_cluster, m_berry, m_everything):
         """Post-process berry segmentation masks using cluster and everything masks.
 
         Args:
@@ -282,18 +282,15 @@ class GrapePipeline:
         Returns:
             torch.Tensor: Filtered and refined berry segmentation masks
         """
-        # s1 filter out
-
-        # s2 superset
+        ...
 
     def cal_closure(berry_masks, cluster_masks):
-
-        #  a csv file that list image name, cluster closure, berry number.
         for cluster_mask in cluster_masks:
             # sum corresponding berry masks
             pass
         ...
 
+    #  a csv file that list image name, cluster closure, berry number.
     def process_folder(self, input_folder, format):
         """Process all images in the input folder through the grape detection pipeline.
 
@@ -303,8 +300,6 @@ class GrapePipeline:
         """
         # Get list of files with matching format first
         image_files = [f for f in os.listdir(input_folder) if f.endswith(tuple(format))]
-
-        # Initialize progress bar with memory usage
         pbar = tqdm(total=len(image_files), desc="Processing images", unit="image")
         process = psutil.Process()
 
@@ -313,7 +308,7 @@ class GrapePipeline:
 
             # Step 1: get mask set M_p, M_e
             berry_img_title = os.path.splitext(filename)[0] + "_berry"
-            img, berry_masks_cpu, _berry_scores_cpu = self.segment_berry(img_path)
+            img, berry_masks_cpu, berry_scores_cpu = self.segment_berry(img_path)
 
             everything_img_title = os.path.splitext(filename)[0] + "_everything"
             img, everything_masks_cpu, everything_scores_cpu = self.segment_everything(
