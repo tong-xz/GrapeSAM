@@ -36,7 +36,10 @@ class GrapePipeline:
         )
         self.sam_processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
         self.generator = pipeline(
-            "mask-generation", model="facebook/sam-vit-huge", device=self.device
+            "mask-generation",
+            model="facebook/sam-vit-huge",
+            image_processor=self.sam_processor.image_processor,
+            device=self.device,
         )
 
         # berry part
@@ -139,7 +142,6 @@ class GrapePipeline:
         """
         ...
 
-    # add everything mode to post processing mask
     def segment_berry(self, img_path):
         """Segment individual berries in a grape image using point detection model and SAM.
 
@@ -228,7 +230,7 @@ class GrapePipeline:
         Args:
             m_cluster (torch.Tensor): Grape cluster segmentation masks
             m_berry (torch.Tensor): Berry segmentation masks
-            m_everything (torch.Tensor): Everything segmentation masks
+            m_everything (torch.Tensor): Everything segmentation masks from SAM' everything mode
 
         Returns:
             torch.Tensor: Filtered and refined berry segmentation masks
@@ -236,6 +238,13 @@ class GrapePipeline:
         # s1 filter out
 
         # s2 superset
+
+    def cal_closure(berry_masks, cluster_masks):
+
+        #  a csv file that list image name, cluster closure, berry number.
+        for cluster_mask in cluster_masks:
+            # sum corresponding berry masks
+            pass
         ...
 
     def process_folder(self, input_folder, format):
@@ -253,21 +262,11 @@ class GrapePipeline:
         process = psutil.Process()
 
         for i, filename in enumerate(image_files):
-            # Get memory usage before processing
-            if self.device.type == "cuda":
-                mem_before = (
-                    torch.cuda.memory_allocated() / 1024 / 1024 / 1024
-                )  # Convert to GB
-            else:
-                mem_before = (
-                    process.memory_info().rss / 1024 / 1024 / 1024
-                )  # Convert to GB
-
             img_path = os.path.join(input_folder, filename)
 
             # Step 1: get mask set M_p, M_e
             berry_img_title = os.path.splitext(filename)[0] + "_berry"
-            img, berry_masks_cpu, _ = self.segment_berry(img_path)
+            img, berry_masks_cpu, _berry_scores_cpu = self.segment_berry(img_path)
 
             everything_img_title = os.path.splitext(filename)[0] + "_everything"
             img, everything_masks_cpu, everything_scores_cpu = self.segment_everything(
@@ -277,7 +276,7 @@ class GrapePipeline:
 
             show_masks_on_image(
                 img,
-                berry_masks_cpu,
+                everything_masks_cpu,
                 title=berry_img_title,
                 alpha=0.6,
                 show_background=True,
@@ -303,11 +302,7 @@ class GrapePipeline:
                 used_memory = process.memory_info().rss / 1024 / 1024 / 1024
                 total_memory = psutil.virtual_memory().total / 1024 / 1024 / 1024
 
-            pbar.set_postfix(
-                {
-                    "Mem": f"{used_memory:.1f}/{total_memory:.1f}GB ({used_memory/total_memory:.1%})"
-                }
-            )
+            pbar.set_postfix({"Mem": f"{used_memory:.1f}/{total_memory:.1f}GB)"})
             pbar.update(1)
 
         pbar.close()
