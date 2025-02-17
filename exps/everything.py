@@ -52,18 +52,19 @@ raw_image = Image.open(img_path).convert("RGB")
 sam_processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
 
 inputs = sam_processor(images=raw_image, return_tensors="pt").to("cuda")
-tgt_shape = inputs["reshaped_input_sizes"][0]
-target_height, target_width = tgt_shape[0], tgt_shape[1]
+# tgt_shape = inputs["reshaped_input_sizes"][0]
+# target_height, target_width = tgt_shape[0], tgt_shape[1]
 
-# Resize image to match target dimensions
-if raw_image.size != (target_width, target_height):  # PIL uses (width, height) order
-    raw_image = raw_image.resize(
-        (target_width, target_height), Image.Resampling.LANCZOS
-    )
+# # Resize image to match target dimensions
+# if raw_image.size != (target_width, target_height):  # PIL uses (width, height) order
+#     raw_image = raw_image.resize(
+#         (target_width, target_height), Image.Resampling.LANCZOS
+#     )
 
 generator = pipeline(
     "mask-generation",
     model="facebook/sam-vit-huge",
+    image_processor=sam_processor.image_processor,
     device=0,
 )
 
@@ -71,6 +72,7 @@ generator = pipeline(
 # Start prediction timing
 pred_start_time = time.time()
 outputs = generator(raw_image, points_per_batch=256)  # Reduced points_per_batch
+
 
 pred_time = time.time() - pred_start_time
 print(f"Prediction time: {pred_time:.2f} seconds")
