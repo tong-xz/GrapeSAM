@@ -530,20 +530,20 @@ def predict_by_points(
         outputs = model(**inputs, multimask_output=multimask_output)
 
         # change masks to original size
-        # masks = processor.image_processor.post_process_masks(
-        #     outputs.pred_masks.cpu(),
-        #     inputs["original_sizes"].cpu(),
-        #     inputs["reshaped_input_sizes"].cpu(),
-        # )
-
-        # not change masks to original size
         masks = processor.image_processor.post_process_masks(
             outputs.pred_masks.cpu(),
-            # inputs["reshaped_input_sizes"].cpu(),
-            # inputs["reshaped_input_sizes"].cpu(),
-            inputs["original_sizes"],
-            inputs["original_sizes"],
+            inputs["original_sizes"].cpu(),
+            inputs["reshaped_input_sizes"].cpu(),
         )
+
+        # not change masks to original size
+        # masks = processor.image_processor.post_process_masks(
+        #     outputs.pred_masks.cpu(),
+        #     inputs["reshaped_input_sizes"].cpu(),
+        #     inputs["reshaped_input_sizes"].cpu(),
+        #     # inputs["original_sizes"],
+        #     # inputs["original_sizes"],
+        # )
     scores = outputs.iou_scores
 
     if optimal:

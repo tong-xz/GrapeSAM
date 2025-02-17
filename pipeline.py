@@ -1,3 +1,4 @@
+from matplotlib import pyplot as plt
 from model import PointModel, utils, sam
 from PIL import Image
 import torchvision.transforms as transforms
@@ -323,7 +324,7 @@ class GrapePipeline:
             # print(berry_masks_cpu.shape, everything_masks_cpu.shape)
 
             show_masks_on_image(
-                img,
+                img.resize((3024, 4032)),
                 berry_masks_cpu,
                 title=berry_img_title,
                 alpha=0.6,
@@ -334,17 +335,28 @@ class GrapePipeline:
             # Step 2: get grape cluster mask set M3
             mask_instance = self.segment_grape_cluster(img_path)
             if mask_instance is not None:
-                grouped_masks = self.group_small_masks_by_instance(
+                # grouped_masks: list of list of berry mask. The first list is instance number, the second list is berry number in the instance.
+                grouped_masks = self._group_small_masks_by_instance(
                     mask_instance, berry_masks_cpu.squeeze(1), 0.5
                 )
-
-                torchshow.save(
-                    torch.stack([i * 2 for i in grouped_masks])
-                    .type(torch.bool)
-                    .any(dim=0)
-                    .unsqueeze(0),
-                    "filter.png",
+                # make mask together
+                grouped_masks = torch.stack(
+                    [
+                        torch.stack(i).type(torch.bool).any(dim=0)
+                        for i in grouped_masks
+                        if len(i) != 0
+                    ]
+                ).unsqueeze(1)
+                all_masks = torch.cat((grouped_masks, berry_masks_cpu), dim=0)
+                show_masks_on_image(
+                    img.resize((3024, 4032)),
+                    all_masks,
+                    title=os.path.splitext(filename)[0] + "_all_masks",
+                    alpha=0.6,
+                    show_background=True,
+                    save_path=self.img_save_path,
                 )
+
             # STep 3: Use M3 as filter to remove outlier masks in M1, M2
 
             # save predicted berry masks
