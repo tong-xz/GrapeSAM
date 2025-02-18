@@ -318,6 +318,7 @@ class GrapePipeline:
 
             # Step 1: get mask set M_p, M_e
             berry_img_title = os.path.splitext(filename)[0] + "_berry"
+            short_name = os.path.splitext(filename)[0]
             img, berry_masks_cpu, berry_scores_cpu = self.segment_berry(img_path)
 
             everything_img_title = os.path.splitext(filename)[0] + "_everything"
@@ -337,7 +338,9 @@ class GrapePipeline:
 
             # Step 2: get grape cluster mask set M3
             mask_instance = self.segment_grape_cluster(img_path)
-            if mask_instance is not None:
+            if mask_instance is None:
+                print(f"{short_name} instance segmentation result is None.")
+            else:
                 # filtered_berry_masks: list of list of berry mask. The first dim is instance number, the second dim is berry number in the instance.
                 filtered_berry_masks = self._group_small_masks_by_instance(
                     mask_instance, berry_masks_cpu.squeeze(1), 0.5
@@ -348,13 +351,26 @@ class GrapePipeline:
                 # used to debug
                 import torchshow
 
-                torchshow.save(
-                    torch.stack(filtered_everything_masks[0])
-                    .squeeze(1)
-                    .bool()
-                    .any(dim=0),
-                    "every.png",
-                )
+                for idx, filtered_everything_mask in enumerate(
+                    filtered_everything_masks
+                ):
+                    torchshow.save(
+                        torch.stack(filtered_everything_mask)
+                        .squeeze(1)
+                        .bool()
+                        .any(dim=0),
+                        os.path.join(
+                            self.img_save_path, f"{short_name}_everything_filter_{idx}"
+                        ),
+                    )
+
+                for idx, filtered_berry_mask in enumerate(filtered_berry_masks):
+                    torchshow.save(
+                        torch.stack(filtered_berry_mask).squeeze(1).bool().any(dim=0),
+                        os.path.join(
+                            self.img_save_path, f"{short_name}_berry_filter_{idx}"
+                        ),
+                    )
 
                 # vis part
                 vis = False
