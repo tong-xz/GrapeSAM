@@ -436,7 +436,77 @@ def show_masks_on_image0(raw_image, masks, output_path):
     plt.axis("off")
     plt.savefig(output_path)
     plt.close()
-    gc.collect()
+
+
+def show_grape_and_berry(
+    raw_image, grape_instances, berry_instances, title=None, alpha=0.6, save_path=None
+):
+    """
+    Display three subplots showing grape and berry masks:
+    1. Background with grape masks
+    2. Background with berry masks
+    3. Berry masks without background
+
+    Args:
+        raw_image: Original image
+        grape_instances: Grape segmentation masks
+        berry_instances: Berry segmentation masks
+        title: Base title for the plot
+        alpha: Transparency of masks
+        save_path: Path to save the figure
+    """
+    # Convert masks to NumPy if they're PyTorch tensors
+    if torch.is_tensor(grape_instances):
+        grape_instances = grape_instances.cpu().numpy()
+    if torch.is_tensor(berry_instances):
+        berry_instances = berry_instances.cpu().numpy()
+
+    # Ensure masks are 3D
+    grape_instances = np.atleast_3d(grape_instances)
+    berry_instances = np.atleast_3d(berry_instances)
+
+    # Create figure with three subplots
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(27, 10), dpi=300)
+
+    plt.subplots_adjust(
+        left=0.01,  # Left margin
+        right=0.99,  # Right margin
+        wspace=0.01,  # Width spacing between subplots
+        bottom=0.01,  # Bottom margin
+        top=1.2,  # Top margin
+    )
+
+    # Plot 1: Background with grape masks
+    ax1.imshow(raw_image, interpolation="nearest")
+    for mask in grape_instances:
+        show_mask(mask, ax1, random_color=True, alpha=0.8)
+    ax1.set_title("Grape Instances", fontsize=14)
+    ax1.axis("off")
+
+    # Plot 2: Background with berry masks
+    ax2.imshow(raw_image, interpolation="nearest")
+    for mask in berry_instances:
+        show_mask(mask, ax2, random_color=True, alpha=alpha)
+    ax2.set_title("Berry Instances", fontsize=14)
+    ax2.axis("off")
+
+    # Plot 3: Berry masks without background
+    ax3.set_facecolor("black")  # Set black background
+    for mask in berry_instances:
+        show_mask(mask, ax3, random_color=True, alpha=alpha)
+    ax3.set_title("Berry Instances (No Background)", fontsize=14)
+    ax3.axis("off")
+
+    # Save or show image with specific padding
+    if save_path is not None:
+        save_file = os.path.join(
+            save_path, f"{title if title else 'grape_and_berry'}.png"
+        )
+        fig.savefig(save_file, bbox_inches="tight", pad_inches=0.5, dpi=300)
+    else:
+        plt.show()
+
+    plt.close(fig)  # Close figure to free memory
 
 
 # TODO need to modify

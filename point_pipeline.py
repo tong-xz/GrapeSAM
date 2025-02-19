@@ -30,7 +30,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 sam_model = SamModel.from_pretrained("facebook/sam-vit-huge").to(device)
 
 
-# TODO WHAT DOES SEGMENTATION MAP MEAN AND CAN WE DIRECTLY USE IT？
 sam_processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
 best_masks, best_scores = sam.predict_by_points(
     sam_model,

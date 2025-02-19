@@ -11,7 +11,7 @@ import gc
 import psutil  # Add this import at the top
 import argparse
 import numpy as np
-from model.utils import load_config, show_masks_on_image, show_grape_and_berry
+from model.utils import load_config, show_masks_on_image
 from detectron2.config import get_cfg
 from detectron2.projects.deeplab import add_deeplab_config
 from model.mask.mask2former import add_maskformer2_config
@@ -42,6 +42,12 @@ class GrapePipeline:
 
         self.sam_model = SamModel.from_pretrained(sam_from_pretrained).to(self.device)
         self.sam_processor = SamProcessor.from_pretrained(sam_from_pretrained)
+        self.generator = pipeline(
+            "mask-generation",
+            model=sam_from_pretrained,
+            image_processor=self.sam_processor.image_processor,
+            device=self.device,
+        )
 
         # berry part
         self.point_model = PointModel(point_model_path, self.device)
@@ -141,7 +147,9 @@ class GrapePipeline:
             image = Image.open(f)
             mask2former_img = np.array(image)[:, :, ::-1]  # mask2former need BGR
 
-        mask_instance, _ = self.mask2former.run_on_image(mask2former_img)
+        mask_instance, visualized_output = self.mask2former.run_on_image(
+            mask2former_img
+        )
 
         return mask_instance
 
@@ -242,9 +250,9 @@ class GrapePipeline:
             threshold (float): A float between 0 and 1, representing the minimum overlap percentage required for a small mask to be considered valid.
 
         Returns:
-            list: A list of N torch.Tensors, where each tensor has shape (K_i, H, W),
-                 K_i being the number of small masks that overlap with the i-th large mask.
+            list of lists: A list of N lists, where each sublist contains small masks that overlap with the corresponding large mask instance.
         """
+
         # Initialize a list of N empty lists (one for each large mask instance)
         grouped_masks = [[] for _ in range(large_masks.shape[0])]
 
@@ -271,23 +279,20 @@ class GrapePipeline:
                     grouped_masks[i].append(small_mask)
                     break  # We found the large mask instance for this small mask, no need to check other large masks
 
-        # Convert lists of masks to tensors
-        tensor_grouped_masks = []
-        for mask_group in grouped_masks:
-            if mask_group:  # If the group is not empty
-                # Stack masks along first dimension
-                tensor_group = torch.stack(mask_group, dim=0)  # Shape: (K_i, H, W)
-                tensor_grouped_masks.append(tensor_group)
-            else:
-                # Create empty tensor with correct shape if no masks in group
-                H, W = large_masks.shape[1:]
-                tensor_grouped_masks.append(
-                    torch.zeros(
-                        (0, H, W), dtype=large_masks.dtype, device=large_masks.device
-                    )
-                )
+        return grouped_masks
 
-        return tensor_grouped_masks
+    def union_berries(m_cluster, m_berry, m_everything):
+        """Post-process berry segmentation masks using cluster and everything masks.
+
+        Args:
+            m_cluster (torch.Tensor): Grape cluster segmentation masks
+            m_berry (torch.Tensor): Berry segmentation masks
+            m_everything (torch.Tensor): Everything segmentation masks from SAM' everything mode
+
+        Returns:
+            torch.Tensor: Filtered and refined berry segmentation masks
+        """
+        ...
 
     def cal_closure(berry_masks, cluster_masks):
         for cluster_mask in cluster_masks:
@@ -312,42 +317,87 @@ class GrapePipeline:
             img_path = os.path.join(input_folder, filename)
 
             # Step 1: get mask set M_p, M_e
+            berry_img_title = os.path.splitext(filename)[0] + "_berry"
             short_name = os.path.splitext(filename)[0]
             img, berry_masks_cpu, berry_scores_cpu = self.segment_berry(img_path)
-            # (n, 1, h, w)
 
-            # Step 2: get grape cluster mask set
-            grape_instances = self.segment_grape_cluster(img_path)  # (n, h, w)
+            everything_img_title = os.path.splitext(filename)[0] + "_everything"
+            img, everything_masks_cpu, everything_scores_cpu = self.segment_everything(
+                img_path
+            )
+            # print(berry_masks_cpu.shape, everything_masks_cpu.shape)
 
-            # Step 3: group berries and visualization
-            if grape_instances is None:
+            show_masks_on_image(
+                img.resize((3024, 4032)),
+                berry_masks_cpu,
+                title=berry_img_title,
+                alpha=0.6,
+                show_background=True,
+                save_path=self.img_save_path,
+            )
+
+            # Step 2: get grape cluster mask set M3
+            mask_instance = self.segment_grape_cluster(img_path)
+            if mask_instance is None:
                 print(f"{short_name} instance segmentation result is None.")
             else:
                 # filtered_berry_masks: list of list of berry mask. The first dim is instance number, the second dim is berry number in the instance.
                 filtered_berry_masks = self._group_small_masks_by_instance(
-                    grape_instances, berry_masks_cpu.squeeze(1), 0.5
+                    mask_instance, berry_masks_cpu.squeeze(1), 0.5
                 )
-
-                # cat over 1st dim for visualization
-                all_filtered_berry_masks = torch.cat(filtered_berry_masks, dim=0)
-
-                # show_masks_on_image(
-                #     img.resize((3024, 4032)),
-                #     all_filtered_berry_masks,
-                #     title=os.path.splitext(filename)[0] + "_all_masks",
-                #     alpha=0.8,
-                #     show_background=True,
-                #     save_path=self.img_save_path,
-                # )
-
-                show_grape_and_berry(
-                    img.resize((3024, 4032)),
-                    grape_instances,
-                    all_filtered_berry_masks,
-                    title=os.path.splitext(filename)[0] + "_all_masks",
-                    alpha=0.6,
-                    save_path=self.img_save_path,
+                filtered_everything_masks = self._group_small_masks_by_instance(
+                    mask_instance, everything_masks_cpu, 0.5
                 )
+                # used to debug
+                import torchshow
+
+                for idx, filtered_everything_mask in enumerate(
+                    filtered_everything_masks
+                ):
+                    torchshow.save(
+                        torch.stack(filtered_everything_mask)
+                        .squeeze(1)
+                        .bool()
+                        .any(dim=0),
+                        os.path.join(
+                            self.img_save_path, f"{short_name}_everything_filter_{idx}"
+                        ),
+                    )
+
+                for idx, filtered_berry_mask in enumerate(filtered_berry_masks):
+                    torchshow.save(
+                        torch.stack(filtered_berry_mask).squeeze(1).bool().any(dim=0),
+                        os.path.join(
+                            self.img_save_path, f"{short_name}_berry_filter_{idx}"
+                        ),
+                    )
+
+                # vis part
+                vis = False
+                if vis == True:
+                    # make berry masks together, only used in vis.
+                    filtered_berry_masks_grouped = torch.stack(
+                        [
+                            torch.stack(i).type(torch.bool).any(dim=0)
+                            for i in filtered_berry_masks
+                            if len(i) != 0
+                        ]
+                    ).unsqueeze(1)
+                    all_masks = torch.cat(
+                        (filtered_berry_masks, berry_masks_cpu), dim=0
+                    )
+                    show_masks_on_image(
+                        img.resize((3024, 4032)),
+                        all_masks,
+                        title=os.path.splitext(filename)[0] + "_all_masks",
+                        alpha=0.6,
+                        show_background=True,
+                        save_path=self.img_save_path,
+                    )
+
+            # STep 3: Use M3 as filter to remove outlier masks in M1, M2
+
+            # save predicted berry masks
 
             # Update progress bar with memory info
             if self.device.type == "cuda":
