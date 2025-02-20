@@ -438,75 +438,227 @@ def show_masks_on_image0(raw_image, masks, output_path):
     plt.close()
 
 
+import numpy as np
+import torch
+import cv2
+import os
+from PIL import Image
+
+import numpy as np
+import torch
+import cv2
+import os
+import random
+from PIL import Image
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+
+import numpy as np
+import torch
+import cv2
+import os
+import random
+from PIL import Image
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import matplotlib
+
+
+import os
+import cv2
+import random
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import torch
+from PIL import Image
+
+
+import os
+import cv2
+import random
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import torch
+from PIL import Image
+
+
+import os
+import cv2
+import random
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import torch
+from PIL import Image
+
+
 def show_grape_and_berry(
-    raw_image, grape_instances, berry_instances, title=None, alpha=0.6, save_path=None
+    raw_image,
+    grape_instances,
+    berry_instances,
+    title=None,
+    alpha=0.6,
+    save_path=None,
 ):
     """
-    Display three subplots showing grape and berry masks:
-    1. Background with grape masks
-    2. Background with berry masks
-    3. Berry masks without background
-
-    Args:
-        raw_image: Original image
-        grape_instances: Grape segmentation masks
-        berry_instances: Berry segmentation masks
-        title: Base title for the plot
-        alpha: Transparency of masks
-        save_path: Path to save the figure
+    Optimized function to display grape and berry masks with adjustable background transparency.
     """
-    # Convert masks to NumPy if they're PyTorch tensors
+    bg_alpha = 1.0
+    if save_path:
+        plt.switch_backend("Agg")
+
+    # Calculate aspect ratio of the input image
+    if isinstance(raw_image, Image.Image):
+        h, w = raw_image.height, raw_image.width
+    else:
+        h, w = raw_image.shape[:2]
+    aspect_ratio = w / h
+
+    # Adjust figure size based on aspect ratio while maintaining total width
+    total_width = 27  # Total width in inches
+    subplot_width = total_width / 3.5  # Leave some space for gaps
+    subplot_height = subplot_width / aspect_ratio
+
+    # Create figure with gridspec for more control
+    fig = plt.figure(
+        figsize=(total_width, subplot_height), dpi=300 if save_path else 100
+    )
+    gs = fig.add_gridspec(
+        1,
+        3,
+        width_ratios=[1, 1, 1],
+        left=0.01,
+        right=0.99,
+        bottom=0.01,
+        top=0.99,
+        wspace=0.02,  # Consistent spacing between subplots
+    )
+
+    ax1 = fig.add_subplot(gs[0])
+    ax2 = fig.add_subplot(gs[1])
+    ax3 = fig.add_subplot(gs[2])
+
+    # Convert tensors to numpy
     if torch.is_tensor(grape_instances):
         grape_instances = grape_instances.cpu().numpy()
     if torch.is_tensor(berry_instances):
         berry_instances = berry_instances.cpu().numpy()
 
-    # Ensure masks are 3D
+    # Ensure 3D shape
     grape_instances = np.atleast_3d(grape_instances)
     berry_instances = np.atleast_3d(berry_instances)
 
-    # Create figure with three subplots
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(27, 10), dpi=300)
+    def overlay_masks(
+        image, masks, alpha=0.6, bg_alpha=1.0, white_bg=False, color_seed=None
+    ):
+        """
+        Overlay instance masks on an image with random colors.
 
-    plt.subplots_adjust(
-        left=0.01,  # Left margin
-        right=0.99,  # Right margin
-        wspace=0.01,  # Width spacing between subplots
-        bottom=0.01,  # Bottom margin
-        top=1.2,  # Top margin
+        Parameters:
+            image (np.ndarray or None): The base image to overlay the masks on.
+            masks (np.ndarray): A stack of binary instance masks.
+            alpha (float): Opacity of the masks.
+            bg_alpha (float): Background clarity adjustment (0.0 = white, 1.0 = original).
+            white_bg (bool): If True, enforce a pure white background.
+            color_seed (int or None): Seed for random color generation to differentiate grape and berry masks.
+        """
+
+        # Convert PIL image to NumPy array
+        if isinstance(image, Image.Image):
+            image = np.array(image)
+
+        # Create a base white background
+        h, w = masks.shape[1:3]
+        white_background = np.full((h, w, 3), 255, dtype=np.uint8)
+
+        if white_bg:
+            # For third plot: Use a **pure white background** with NO blending
+            image = white_background.copy()
+        else:
+            # Blend the background with white using bg_alpha correctly
+            if image is not None:
+                image = cv2.addWeighted(
+                    image.astype(np.float32),
+                    bg_alpha,
+                    white_background.astype(np.float32),
+                    1 - bg_alpha,
+                    0,
+                ).astype(np.uint8)
+            else:
+                image = white_background.copy()  # Ensure a valid background
+
+        # Convert grayscale to RGB if needed
+        if image.ndim == 2:
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+
+        # Ensure different random colors for grape and berry masks
+        if color_seed is not None:
+            random.seed(color_seed)  # Set different seeds for grape and berry
+
+        # Generate unique colors for each instance
+        unique_masks = len(masks)
+        random_colors = [
+            tuple(
+                (np.array(mcolors.hsv_to_rgb([random.random(), 1, 1])) * 255).astype(
+                    int
+                )
+            )
+            for _ in range(unique_masks)
+        ]
+
+        # Initialize mask overlay
+        mask_combined = np.zeros_like(image, dtype=np.uint8)
+
+        # Apply each mask
+        for idx, mask in enumerate(masks):
+            mask = (mask > 0).astype(np.uint8)  # Ensure binary mask
+            mask_color = np.full_like(image, random_colors[idx], dtype=np.uint8)
+            mask_combined = cv2.add(mask_combined, mask_color * mask[..., None])
+
+        # Ensure correct data type
+        mask_combined = mask_combined.astype(image.dtype)
+
+        return cv2.addWeighted(image, 1 - alpha, mask_combined, alpha, 0)
+
+    # Generate overlayed images with distinct colors
+    grape_overlay = overlay_masks(
+        raw_image, grape_instances, alpha=alpha, bg_alpha=bg_alpha, color_seed=42
+    )
+    berry_overlay = overlay_masks(
+        raw_image, berry_instances, alpha=alpha, bg_alpha=bg_alpha, color_seed=84
+    )
+    berry_no_bg = overlay_masks(
+        None, berry_instances, alpha=alpha, white_bg=True, color_seed=84
     )
 
-    # Plot 1: Background with grape masks
-    ax1.imshow(raw_image, interpolation="nearest")
-    for mask in grape_instances:
-        show_mask(mask, ax1, random_color=True, alpha=0.8)
-    ax1.set_title("Grape Instances", fontsize=14)
+    # Display results with equal aspect ratio
+    ax1.imshow(grape_overlay)
+    ax1.set_aspect("equal")
     ax1.axis("off")
 
-    # Plot 2: Background with berry masks
-    ax2.imshow(raw_image, interpolation="nearest")
-    for mask in berry_instances:
-        show_mask(mask, ax2, random_color=True, alpha=alpha)
-    ax2.set_title("Berry Instances", fontsize=14)
+    ax2.imshow(berry_overlay)
+    ax2.set_aspect("equal")
     ax2.axis("off")
 
-    # Plot 3: Berry masks without background
-    ax3.set_facecolor("black")  # Set black background
-    for mask in berry_instances:
-        show_mask(mask, ax3, random_color=True, alpha=alpha)
-    ax3.set_title("Berry Instances (No Background)", fontsize=14)
+    ax3.imshow(berry_no_bg)
+    ax3.set_aspect("equal")
+    ax3.set_facecolor("white")
     ax3.axis("off")
 
-    # Save or show image with specific padding
-    if save_path is not None:
+    # Save or display the figure
+    if save_path:
         save_file = os.path.join(
             save_path, f"{title if title else 'grape_and_berry'}.png"
         )
-        fig.savefig(save_file, bbox_inches="tight", pad_inches=0.5, dpi=300)
+        fig.savefig(
+            save_file, bbox_inches="tight", pad_inches=0.5, facecolor="white", dpi=300
+        )
     else:
         plt.show()
 
-    plt.close(fig)  # Close figure to free memory
+    plt.close(fig)
 
 
 # TODO need to modify

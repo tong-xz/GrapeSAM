@@ -16,7 +16,9 @@ from detectron2.config import get_cfg
 from detectron2.projects.deeplab import add_deeplab_config
 from model.mask.mask2former import add_maskformer2_config
 from model.mask.predictor import Mask2FormerRunner
-import torchshow
+import pandas as pd
+import random
+import warnings
 
 
 class GrapePipeline:
@@ -128,44 +130,38 @@ class GrapePipeline:
 
         return raw_img
 
-    def segment_grape_cluster(self, img_path):
+    def segment_grape_cluster(self, img):
         """Segment grape clusters in the input image.
 
         Args:
-            img_path (str): Path to the input image file
+            img (PIL.Image): Input image in PIL format
 
         Returns:
-            tuple: Segmentation results for grape clusters (implementation pending)
+            torch.Tensor: Binary masks for detected grape clusters (N x H x W)
+                where N is the number of detected clusters
         """
-        with open(img_path, "rb") as f:
-            image = Image.open(f)
-            mask2former_img = np.array(image)[:, :, ::-1]  # mask2former need BGR
-
+        mask2former_img = np.array(img)[:, :, ::-1]  # mask2former need BGR
         mask_instance, _ = self.mask2former.run_on_image(mask2former_img)
 
         return mask_instance
 
-    def segment_berry(self, img_path):
+    def segment_berry(self, img):
         """Segment individual berries in a grape image using point detection model and SAM.
 
         Args:
-            img_path (str): Path to the input image file
+            img (PIL.Image): Input image in PIL format
 
         Returns:
             tuple: A tuple containing:
-                - PIL.Image: The original input image
+                - PIL.Image: The input image
                 - torch.Tensor: Binary masks for detected berries (N x 1 x H x W)
-                - torch.Tensor: Confidence scores for each detected berry mask
+                - torch.Tensor: Confidence scores for each detected berry mask (N,)
+                  where N is the number of detected berries
         """
-        best_masks_cpu = None
-        best_scores_cpu = None
 
         try:
-            img = Image.open(img_path).convert("RGB")
             img_tensor = self.trans(img).unsqueeze(0).to(self.device)
-            # scatter point prediction
             pred_points, pred_points_score = self.point_model(img_tensor)
-            # sam segment by points
             best_masks, best_scores = sam.predict_by_points(
                 self.sam_model,
                 self.sam_processor,
@@ -174,18 +170,10 @@ class GrapePipeline:
                 optimal=True,
                 multimask_output=True,
             )
-            # Create copies on CPU before cleanup
-            best_masks_cpu = best_masks.cpu().detach()
-            best_scores_cpu = best_scores.cpu().detach()
-
+            return img, best_masks.cpu(), best_scores.cpu()
         except Exception as e:
-            print(f"Error processing {img_path}: {str(e)}")
-        finally:
-            # Release GPU memory & CPU memory
-            torch.cuda.empty_cache()
-            gc.collect()
-
-        return img, best_masks_cpu, best_scores_cpu
+            print(f"Error processing: {str(e)}")
+            return img, None, None
 
     def segment_everything(self, img_path, points_per_batch=256):
         """Generate segmentation masks for all objects in the image using SAM.
@@ -207,30 +195,19 @@ class GrapePipeline:
         everything_scores_cpu = None
         try:
             outputs = self.generator(resized_img, points_per_batch=points_per_batch)
-            # Move masks to CPU and convert to float32
             everything_masks = torch.as_tensor(
                 np.array(outputs["masks"], dtype=np.float32), device="cpu"
             )
-
             everything_masks = self.sam_processor.image_processor.post_process_masks(
                 everything_masks.unsqueeze(0).unsqueeze(2), ori_shape, resized_shape
             )[0]
-
             everything_scores = torch.as_tensor(
                 np.array(outputs["scores"], dtype=np.float32), device="cpu"
             )
-
-            # Create copy on CPU before cleanup
-            everything_masks_cpu = everything_masks.cpu().detach()
-            everything_scores_cpu = everything_scores.cpu().detach()
-
+            return resized_img, everything_masks, everything_scores
         except Exception as e:
             print(f"Error processing {img_path}: {str(e)}")
-        finally:
-            # Release GPU memory & CPU memory
-            torch.cuda.empty_cache()
-            gc.collect()
-        return resized_img, everything_masks_cpu, everything_scores_cpu
+            return resized_img, None, None
 
     def _group_small_masks_by_instance(self, large_masks, small_masks, threshold=0.5):
         """
@@ -296,28 +273,31 @@ class GrapePipeline:
         ...
 
     #  a csv file that list image name, cluster closure, berry number.
-    def process_folder(self, input_folder, format):
+    def process_folder(self, input_folder):
         """Process all images in the input folder through the grape detection pipeline.
 
         Args:
             input_folder (str): Path to the folder containing input images
             format (str or list): File extension(s) of images to process (e.g., 'png', ['jpg', 'jpeg'])
         """
-        # Get list of files with matching format first
+        # Initialize list to store results
+        csv_results = []
+        format = ["png", "jpg", "jpeg"]
         image_files = [f for f in os.listdir(input_folder) if f.endswith(tuple(format))]
         pbar = tqdm(total=len(image_files), desc="Processing images", unit="image")
         process = psutil.Process()
 
         for i, filename in enumerate(image_files):
             img_path = os.path.join(input_folder, filename)
-
-            # Step 1: get mask set M_p, M_e
+            img = Image.open(img_path).convert("RGB")
             short_name = os.path.splitext(filename)[0]
-            img, berry_masks_cpu, berry_scores_cpu = self.segment_berry(img_path)
-            # (n, 1, h, w)
+
+            # Process image
+            img, berry_masks_cpu, berry_scores_cpu = self.segment_berry(img)
+            grape_instances = self.segment_grape_cluster(img)
 
             # Step 2: get grape cluster mask set
-            grape_instances = self.segment_grape_cluster(img_path)  # (n, h, w)
+            grape_instances = self.segment_grape_cluster(img)  # (n, h, w)
 
             # Step 3: group berries and visualization
             if grape_instances is None:
@@ -325,33 +305,37 @@ class GrapePipeline:
             else:
                 # filtered_berry_masks: list of list of berry mask. The first dim is instance number, the second dim is berry number in the instance.
                 filtered_berry_masks = self._group_small_masks_by_instance(
-                    grape_instances, berry_masks_cpu.squeeze(1), 0.5
+                    grape_instances, berry_masks_cpu.squeeze(1), 0.9
                 )
-
-                # cat over 1st dim for visualization
                 all_filtered_berry_masks = torch.cat(filtered_berry_masks, dim=0)
 
-                # show_masks_on_image(
-                #     img.resize((3024, 4032)),
-                #     all_filtered_berry_masks,
-                #     title=os.path.splitext(filename)[0] + "_all_masks",
-                #     alpha=0.8,
-                #     show_background=True,
-                #     save_path=self.img_save_path,
-                # )
+                csv_results.append(
+                    {
+                        "image_name": filename,
+                        "grape_cluster_num": grape_instances.shape[0],
+                        "total_berry_num": all_filtered_berry_masks.shape[0],
+                    }
+                )
 
+                # breakpoint()
                 show_grape_and_berry(
-                    img.resize((3024, 4032)),
+                    img,
+                    # img.resize((3024, 4032)),
                     grape_instances,
                     all_filtered_berry_masks,
-                    title=os.path.splitext(filename)[0] + "_all_masks",
+                    title=short_name + "_all_masks",
                     alpha=0.6,
                     save_path=self.img_save_path,
                 )
 
-            # Update progress bar with memory info
+            # Cleanup after each image
+            img.close()
+            torch.cuda.empty_cache()
+            gc.collect()
+
+            # Update progress bar
             if self.device.type == "cuda":
-                used_memory = torch.cuda.memory_allocated() / 1024 / 1024 / 1024  # GB
+                used_memory = torch.cuda.memory_allocated() / 1024 / 1024 / 1024
                 total_memory = (
                     torch.cuda.get_device_properties(0).total_memory
                     / 1024
@@ -366,6 +350,12 @@ class GrapePipeline:
             pbar.update(1)
 
         pbar.close()
+
+        # Save results
+        df = pd.DataFrame(csv_results)
+        random_str = str(random.randint(100, 999))
+        csv_path = os.path.join(self.img_save_path, f"berry_counts_{random_str}.csv")
+        df.to_csv(csv_path, index=False)
 
 
 def main():
@@ -394,19 +384,13 @@ def main():
     parser.add_argument(
         "--output", type=str, required=True, help="Path to the output folder"
     )
-    parser.add_argument(
-        "--format",
-        type=str,
-        default="png",
-        help="Image format to process (default: png)",
-    )
 
     args = parser.parse_args()
 
     grape_pipeline = GrapePipeline(
         args.point_ckpt, args.mask_ckpt, args.output, sam_from_pretrained=args.sam_pth
     )
-    grape_pipeline.process_folder(args.input, args.format)
+    grape_pipeline.process_folder(args.input)
 
 
 """
