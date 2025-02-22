@@ -209,6 +209,56 @@ class GrapePipeline:
             print(f"Error processing {img_path}: {str(e)}")
             return resized_img, None, None
 
+    def filter_masks_by_area(
+        self, masks: torch.Tensor, num_std_dev: float = 2.0
+    ) -> torch.Tensor:
+        # Step 1: Calculate the area of each mask (sum of True values)
+        areas = masks.sum(dim=(1, 2))  # Sum along H and W for each mask
+
+        # Step 2: Calculate the mean and standard deviation of the areas
+        mean_area = areas.mean()
+        std_area = areas.std()
+
+        # Step 3: Calculate the range based on mean ± num_std_dev * std
+        lower_bound = mean_area - num_std_dev * std_area
+        upper_bound = mean_area + num_std_dev * std_area
+
+        # Step 4: Filter the masks based on the calculated area bounds
+        valid_masks = (areas >= lower_bound) & (areas <= upper_bound)
+
+        # Step 5: Return the filtered masks (using the valid mask indices)
+        return masks[valid_masks]
+
+    def _filter_abnormal_masks(self, masks, k=1):
+        """
+        Filters masks based on their area relative to the mean and standard deviation.
+
+        Args:
+            masks (torch.Tensor): A tensor of shape [N, H, W] where each element is 0 or 1.
+            k (int, optional): The number of standard deviations from the mean to consider. Defaults to 2.
+
+        Returns:
+            torch.Tensor: A filtered tensor containing only those masks whose areas are within k standard deviations of the mean area.
+        """
+        # Calculate the area of each mask by summing the flattened values
+        areas = (masks.flatten(1)).sum(dim=-1)
+
+        # Compute the mean and population standard deviation of the areas
+        mu = torch.mean(areas)
+        sigma = torch.std(areas, unbiased=False)  # Using population std
+
+        # Determine the lower and upper bounds based on k standard deviations
+        lb = mu - k * sigma
+        ub = mu + k * sigma
+
+        # Create a boolean mask for areas within [lb, ub]
+        valid_indices = (areas >= lb) & (areas <= ub)
+
+        # Filter the masks using the valid indices
+        filtered_masks = masks[valid_indices]
+
+        return filtered_masks
+
     def _group_small_masks_by_instance(self, large_masks, small_masks, threshold=0.5):
         """
         Groups small masks based on their overlap with large masks.
@@ -266,11 +316,13 @@ class GrapePipeline:
 
         return tensor_grouped_masks
 
-    def cal_closure(berry_masks, cluster_masks):
-        for cluster_mask in cluster_masks:
-            # sum corresponding berry masks
-            pass
-        ...
+    def cal_closure(self, berry_masks, cluster_masks):
+        closures = []
+        for berry_mask, cluster_mask in zip(berry_masks, cluster_masks):
+            closure = berry_mask.bool().any(dim=0).sum() / cluster_mask.bool().sum()
+            closures.append(closure.item())
+
+        return closures
 
     #  a csv file that list image name, cluster closure, berry number.
     def process_folder(self, input_folder):
@@ -294,6 +346,7 @@ class GrapePipeline:
 
             # Process image
             img, berry_masks_cpu, berry_scores_cpu = self.segment_berry(img)
+            berry_masks_cpu = berry_masks_cpu.squeeze(1)
             grape_instances = self.segment_grape_cluster(img)
 
             # Step 2: get grape cluster mask set
@@ -303,24 +356,35 @@ class GrapePipeline:
             if grape_instances is None:
                 print(f"{short_name} instance segmentation result is None.")
             else:
+                # filer twice is nice. num_std_dev could not be too little.
+                berry_masks_cpu = self.filter_masks_by_area(
+                    berry_masks_cpu.squeeze(1), num_std_dev=3.0
+                )
+                berry_masks_cpu = self.filter_masks_by_area(
+                    berry_masks_cpu, num_std_dev=3.0
+                )
                 # filtered_berry_masks: list of list of berry mask. The first dim is instance number, the second dim is berry number in the instance.
                 filtered_berry_masks = self._group_small_masks_by_instance(
-                    grape_instances, berry_masks_cpu.squeeze(1), 0.9
+                    grape_instances, berry_masks_cpu, 0.9
                 )
                 all_filtered_berry_masks = torch.cat(filtered_berry_masks, dim=0)
+
+                # cal closure
+                closures = self.cal_closure(filtered_berry_masks, grape_instances)
 
                 csv_results.append(
                     {
                         "image_name": filename,
                         "grape_cluster_num": grape_instances.shape[0],
                         "total_berry_num": all_filtered_berry_masks.shape[0],
+                        "closures": ["%.2f" % elem for elem in closures],
+                        "closure_mean": f"{np.mean(closures):.2f}",
                     }
                 )
 
                 # breakpoint()
                 show_grape_and_berry(
                     img,
-                    # img.resize((3024, 4032)),
                     grape_instances,
                     all_filtered_berry_masks,
                     title=short_name + "_all_masks",
