@@ -326,13 +326,7 @@ class GrapePipeline:
 
     #  a csv file that list image name, cluster closure, berry number.
     def process_folder(self, input_folder):
-        """Process all images in the input folder through the grape detection pipeline.
-
-        Args:
-            input_folder (str): Path to the folder containing input images
-            format (str or list): File extension(s) of images to process (e.g., 'png', ['jpg', 'jpeg'])
-        """
-        # Initialize list to store results
+        """Process all images in the input folder through the grape detection pipeline."""
         csv_results = []
         format = ["png", "jpg", "jpeg"]
         image_files = [f for f in os.listdir(input_folder) if f.endswith(tuple(format))]
@@ -340,82 +334,88 @@ class GrapePipeline:
         process = psutil.Process()
 
         for i, filename in enumerate(image_files):
-            img_path = os.path.join(input_folder, filename)
-            img = Image.open(img_path).convert("RGB")
-            short_name = os.path.splitext(filename)[0]
+            try:
+                img_path = os.path.join(input_folder, filename)
+                # Use with statement to ensure proper image closure
+                with Image.open(img_path) as img:
+                    img = img.convert("RGB")
+                    short_name = os.path.splitext(filename)[0]
 
-            # Process image
-            img, berry_masks_cpu, berry_scores_cpu = self.segment_berry(img)
-            berry_masks_cpu = berry_masks_cpu.squeeze(1)
-            grape_instances = self.segment_grape_cluster(img)
+                    # Process in steps to allow memory cleanup
+                    berry_result = self.segment_berry(img)
+                    if berry_result[1] is None:
+                        continue
+                    
+                    img, berry_masks_cpu, berry_scores_cpu = berry_result
+                    berry_masks_cpu = berry_masks_cpu.squeeze(1)
+                    
+                    # Immediately release unused variables
+                    del berry_scores_cpu
+                    
+                    grape_instances = self.segment_grape_cluster(img)
+                    if grape_instances is None:
+                        print(f"{short_name} instance segmentation result is None.")
+                        continue
 
-            # Step 2: get grape cluster mask set
-            grape_instances = self.segment_grape_cluster(img)  # (n, h, w)
+                    # Filtering and grouping operations
+                    berry_masks_cpu = self.filter_masks_by_area(berry_masks_cpu, num_std_dev=3.0)
+                    filtered_berry_masks = self._group_small_masks_by_instance(grape_instances, berry_masks_cpu, 0.9)
+                    
+                    # Release berry_masks_cpu before calculating closure
+                    del berry_masks_cpu
+                    
+                    all_filtered_berry_masks = torch.cat(filtered_berry_masks, dim=0)
+                    closures = self.cal_closure(filtered_berry_masks, grape_instances)
 
-            # Step 3: group berries and visualization
-            if grape_instances is None:
-                print(f"{short_name} instance segmentation result is None.")
-            else:
-                # filer twice is nice. num_std_dev could not be too little.
-                berry_masks_cpu = self.filter_masks_by_area(
-                    berry_masks_cpu.squeeze(1), num_std_dev=3.0
-                )
-                berry_masks_cpu = self.filter_masks_by_area(
-                    berry_masks_cpu, num_std_dev=3.0
-                )
-                # filtered_berry_masks: list of list of berry mask. The first dim is instance number, the second dim is berry number in the instance.
-                filtered_berry_masks = self._group_small_masks_by_instance(
-                    grape_instances, berry_masks_cpu, 0.9
-                )
-                all_filtered_berry_masks = torch.cat(filtered_berry_masks, dim=0)
-
-                # cal closure
-                closures = self.cal_closure(filtered_berry_masks, grape_instances)
-
-                csv_results.append(
-                    {
+                    # Save results
+                    csv_results.append({
                         "image_name": filename,
                         "grape_cluster_num": grape_instances.shape[0],
                         "total_berry_num": all_filtered_berry_masks.shape[0],
                         "closures": ["%.2f" % elem for elem in closures],
                         "closure_mean": f"{np.mean(closures):.2f}",
-                    }
-                )
+                    })
 
-                # breakpoint()
-                show_grape_and_berry(
-                    img,
-                    grape_instances,
-                    all_filtered_berry_masks,
-                    title=short_name + "_all_masks",
-                    alpha=0.6,
-                    save_path=self.img_save_path,
-                )
+                    # Optional: Save CSV every n images
+                    if (i + 1) % 10 == 0:
+                        df = pd.DataFrame(csv_results)
+                        temp_csv_path = os.path.join(self.img_save_path, f"berry_counts_temp.csv")
+                        df.to_csv(temp_csv_path, index=False)
 
-            # Cleanup after each image
-            img.close()
-            torch.cuda.empty_cache()
-            gc.collect()
+                    # Display and save image
+                    show_grape_and_berry(
+                        img,
+                        grape_instances,
+                        all_filtered_berry_masks,
+                        title=short_name + "_all_masks",
+                        alpha=0.6,
+                        save_path=self.img_save_path,
+                        dpi=100
+                    )
+
+                    # Clean up memory
+                    del all_filtered_berry_masks, grape_instances, filtered_berry_masks
+                    torch.cuda.empty_cache()
+                    gc.collect()
+
+            except Exception as e:
+                print(f"Error processing image {filename}: {str(e)}")
+                continue
 
             # Update progress bar
             if self.device.type == "cuda":
                 used_memory = torch.cuda.memory_allocated() / 1024 / 1024 / 1024
-                total_memory = (
-                    torch.cuda.get_device_properties(0).total_memory
-                    / 1024
-                    / 1024
-                    / 1024
-                )
+                total_memory = torch.cuda.get_device_properties(0).total_memory / 1024 / 1024 / 1024
             else:
                 used_memory = process.memory_info().rss / 1024 / 1024 / 1024
                 total_memory = psutil.virtual_memory().total / 1024 / 1024 / 1024
 
-            pbar.set_postfix({"Mem": f"{used_memory:.1f}/{total_memory:.1f}GB)"})
+            pbar.set_postfix({"Memory": f"{used_memory:.1f}/{total_memory:.1f}GB)"})
             pbar.update(1)
 
         pbar.close()
 
-        # Save results
+        # Save final results
         df = pd.DataFrame(csv_results)
         random_str = str(random.randint(100, 999))
         csv_path = os.path.join(self.img_save_path, f"berry_counts_{random_str}.csv")

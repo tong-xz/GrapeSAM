@@ -10,6 +10,9 @@ import yaml
 import os
 from PIL import Image
 import gc
+import cv2
+import random
+import matplotlib.colors as mcolors
 
 
 def load_config(config_path):
@@ -342,8 +345,8 @@ def show_points(coords, labels, ax, marker_size=375):
     )
 
 
-# Use Agg backend for faster rendering (disable interactive mode)
-plt.switch_backend("Agg")
+# # Use Agg backend for faster rendering (disable interactive mode)
+# plt.switch_backend("Agg")
 
 
 def show_mask(mask, ax, random_color=False, color=None, alpha=0.6):
@@ -438,62 +441,6 @@ def show_masks_on_image0(raw_image, masks, output_path):
     plt.close()
 
 
-import numpy as np
-import torch
-import cv2
-import os
-from PIL import Image
-
-import numpy as np
-import torch
-import cv2
-import os
-import random
-from PIL import Image
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-
-import numpy as np
-import torch
-import cv2
-import os
-import random
-from PIL import Image
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-import matplotlib
-
-
-import os
-import cv2
-import random
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-import torch
-from PIL import Image
-
-
-import os
-import cv2
-import random
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-import torch
-from PIL import Image
-
-
-import os
-import cv2
-import random
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-import torch
-from PIL import Image
-
-
 def show_grape_and_berry(
     raw_image,
     grape_instances,
@@ -501,11 +448,11 @@ def show_grape_and_berry(
     title=None,
     alpha=0.6,
     save_path=None,
+    dpi=100
 ):
     """
     Optimized function to display grape and berry masks with adjustable background transparency.
     """
-    bg_alpha = 1.0
     if save_path:
         plt.switch_backend("Agg")
 
@@ -523,7 +470,7 @@ def show_grape_and_berry(
 
     # Create figure with gridspec for more control
     fig = plt.figure(
-        figsize=(total_width, subplot_height), dpi=300 if save_path else 100
+        figsize=(total_width, subplot_height), dpi=dpi
     )
     gs = fig.add_gridspec(
         1,
@@ -551,7 +498,7 @@ def show_grape_and_berry(
     berry_instances = np.atleast_3d(berry_instances)
 
     def overlay_masks(
-        image, masks, alpha=0.6, bg_alpha=1.0, white_bg=False, color_seed=None
+        image, masks, alpha=0.6, white_bg=False, color_seed=None
     ):
         """
         Overlay instance masks on an image with random colors.
@@ -560,7 +507,6 @@ def show_grape_and_berry(
             image (np.ndarray or None): The base image to overlay the masks on.
             masks (np.ndarray): A stack of binary instance masks.
             alpha (float): Opacity of the masks.
-            bg_alpha (float): Background clarity adjustment (0.0 = white, 1.0 = original).
             white_bg (bool): If True, enforce a pure white background.
             color_seed (int or None): Seed for random color generation to differentiate grape and berry masks.
         """
@@ -577,17 +523,8 @@ def show_grape_and_berry(
             # For third plot: Use a **pure white background** with NO blending
             image = white_background.copy()
         else:
-            # Blend the background with white using bg_alpha correctly
-            if image is not None:
-                image = cv2.addWeighted(
-                    image.astype(np.float32),
-                    bg_alpha,
-                    white_background.astype(np.float32),
-                    1 - bg_alpha,
-                    0,
-                ).astype(np.uint8)
-            else:
-                image = white_background.copy()  # Ensure a valid background
+            # Ensure a valid background
+            image = white_background.copy() if image is None else image
 
         # Convert grayscale to RGB if needed
         if image.ndim == 2:
@@ -624,10 +561,10 @@ def show_grape_and_berry(
 
     # Generate overlayed images with distinct colors
     grape_overlay = overlay_masks(
-        raw_image, grape_instances, alpha=alpha, bg_alpha=bg_alpha, color_seed=42
+        raw_image, grape_instances, alpha=alpha, color_seed=42
     )
     berry_overlay = overlay_masks(
-        raw_image, berry_instances, alpha=alpha, bg_alpha=bg_alpha, color_seed=84
+        raw_image, berry_instances, alpha=alpha, color_seed=84
     )
     berry_no_bg = overlay_masks(
         None, berry_instances, alpha=alpha, white_bg=True, color_seed=84
@@ -661,7 +598,6 @@ def show_grape_and_berry(
     plt.close(fig)
 
 
-# TODO need to modify
 def show_img_and_keypoints(img, keypoints, title="Image with Keypoints"):
     """
     Visualize image and keypoints
