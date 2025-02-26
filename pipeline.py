@@ -209,9 +209,40 @@ class GrapePipeline:
             print(f"Error processing {img_path}: {str(e)}")
             return resized_img, None, None
 
-    def filter_masks_by_area(
+    def filter_masks_by_iqr(self, masks: torch.Tensor, log=False) -> torch.Tensor:
+        # Step 1: Calculate the area of each mask (sum of True values)
+        areas = masks.sum(dim=(1, 2))  # Sum along H and W for each mask
+        if log:
+            # Avoid log(0) by adding a small constant (e.g., 1e-6) to proportions_ones
+            areas = np.log(areas + 1e-6)
+            # Normalize log values to [0, 1] (optional step depending on the desired scale)
+            areas = (areas - areas.min()) / (areas.max() - areas.min())
+
+        # Step 2: Calculate the 25th (Q1) and 75th (Q3) percentiles
+        Q1 = areas.quantile(0.25)
+        Q3 = areas.quantile(0.75)
+
+        # Step 3: Calculate the IQR
+        IQR = Q3 - Q1
+
+        # Step 4: Calculate the lower and upper bounds
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+
+        # Step 5: Filter the masks based on the calculated bounds
+        valid_masks = (areas >= lower_bound) & (areas <= upper_bound)
+
+        # Step 6: Return the filtered masks (using the valid mask indices)
+        return masks[valid_masks]
+
+    def filter_masks_by_gaussian(
         self, masks: torch.Tensor, num_std_dev: float = 2.0
     ) -> torch.Tensor:
+        """
+        prompt: I have a set of bool masks, which is a Pytorch tensor shaped as (N, H, W),
+        N is the number of masks. I want to filter out some very large or small masks.
+        I cannot determine the max or min area. Please use the suitable method.
+        """
         # Step 1: Calculate the area of each mask (sum of True values)
         areas = masks.sum(dim=(1, 2))  # Sum along H and W for each mask
 
@@ -324,6 +355,15 @@ class GrapePipeline:
 
         return closures
 
+    def analysis_area_distribution_as_figure(self, masks, name):
+        areas = masks.sum(dim=(1, 2))
+        plt.clf()
+        plt.hist(areas.cpu().numpy(), color="skyblue", edgecolor="black")
+        plt.xlabel("Area (pixels)")
+        plt.ylabel("Frequency")
+        plt.title("Distribution of Mask Areas")
+        plt.savefig(os.path.join(self.img_save_path, f"{name}_distribution.png"))
+
     #  a csv file that list image name, cluster closure, berry number.
     def process_folder(self, input_folder):
         """Process all images in the input folder through the grape detection pipeline."""
@@ -345,41 +385,55 @@ class GrapePipeline:
                     berry_result = self.segment_berry(img)
                     if berry_result[1] is None:
                         continue
-                    
+
                     img, berry_masks_cpu, berry_scores_cpu = berry_result
                     berry_masks_cpu = berry_masks_cpu.squeeze(1)
-                    
+
                     # Immediately release unused variables
                     del berry_scores_cpu
-                    
+
                     grape_instances = self.segment_grape_cluster(img)
                     if grape_instances is None:
                         print(f"{short_name} instance segmentation result is None.")
                         continue
 
                     # Filtering and grouping operations
-                    berry_masks_cpu = self.filter_masks_by_area(berry_masks_cpu, num_std_dev=3.0)
-                    filtered_berry_masks = self._group_small_masks_by_instance(grape_instances, berry_masks_cpu, 0.9)
-                    
+                    self.analysis_area_distribution_as_figure(
+                        berry_masks_cpu, short_name + "_before_filter"
+                    )
+                    berry_masks_cpu = self.filter_masks_by_iqr(berry_masks_cpu)
+
+                    self.analysis_area_distribution_as_figure(
+                        berry_masks_cpu, short_name + "_after_filter"
+                    )
+
+                    filtered_berry_masks = self._group_small_masks_by_instance(
+                        grape_instances, berry_masks_cpu, 0.9
+                    )
+
                     # Release berry_masks_cpu before calculating closure
                     del berry_masks_cpu
-                    
+
                     all_filtered_berry_masks = torch.cat(filtered_berry_masks, dim=0)
                     closures = self.cal_closure(filtered_berry_masks, grape_instances)
 
                     # Save results
-                    csv_results.append({
-                        "image_name": filename,
-                        "grape_cluster_num": grape_instances.shape[0],
-                        "total_berry_num": all_filtered_berry_masks.shape[0],
-                        "closures": ["%.2f" % elem for elem in closures],
-                        "closure_mean": f"{np.mean(closures):.2f}",
-                    })
+                    csv_results.append(
+                        {
+                            "image_name": filename,
+                            "grape_cluster_num": grape_instances.shape[0],
+                            "total_berry_num": all_filtered_berry_masks.shape[0],
+                            "closures": ["%.2f" % elem for elem in closures],
+                            "closure_mean": f"{np.mean(closures):.2f}",
+                        }
+                    )
 
                     # Optional: Save CSV every n images
                     if (i + 1) % 10 == 0:
                         df = pd.DataFrame(csv_results)
-                        temp_csv_path = os.path.join(self.img_save_path, f"berry_counts_temp.csv")
+                        temp_csv_path = os.path.join(
+                            self.img_save_path, f"berry_counts_temp.csv"
+                        )
                         df.to_csv(temp_csv_path, index=False)
 
                     # Display and save image
@@ -390,7 +444,7 @@ class GrapePipeline:
                         title=short_name + "_all_masks",
                         alpha=0.6,
                         save_path=self.img_save_path,
-                        dpi=100
+                        dpi=100,
                     )
 
                     # Clean up memory
@@ -405,7 +459,12 @@ class GrapePipeline:
             # Update progress bar
             if self.device.type == "cuda":
                 used_memory = torch.cuda.memory_allocated() / 1024 / 1024 / 1024
-                total_memory = torch.cuda.get_device_properties(0).total_memory / 1024 / 1024 / 1024
+                total_memory = (
+                    torch.cuda.get_device_properties(0).total_memory
+                    / 1024
+                    / 1024
+                    / 1024
+                )
             else:
                 used_memory = process.memory_info().rss / 1024 / 1024 / 1024
                 total_memory = psutil.virtual_memory().total / 1024 / 1024 / 1024
