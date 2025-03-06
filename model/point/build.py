@@ -125,7 +125,9 @@ class PointModel:
                 img = img.to(self.device)
             with torch.no_grad():
                 heatmap = self.model(img)
-                pred_points, pred_points_score = convert_heatmap_to_points(heatmap)
+                pred_points, pred_points_score = convert_heatmap_to_points(
+                    heatmap, point_threshold=0.05
+                )
                 return pred_points, pred_points_score
 
         except Exception as e:

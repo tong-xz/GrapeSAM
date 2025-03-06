@@ -32,7 +32,7 @@ dtype = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 def grid(H, W, stride):
     coodx = torch.arange(0, W, step=stride) + stride / 2
     coody = torch.arange(0, H, step=stride) + stride / 2
-    y, x = torch.meshgrid([coody.type(dtype) / 1, coodx.type(dtype) / 1])
+    y, x = torch.meshgrid([coody.type(dtype) / 1, coodx.type(dtype) / 1], indexing='ij')
     return torch.stack((x, y), dim=2).view(-1, 2)
 
 
@@ -347,8 +347,7 @@ class EMDTrainer(Trainer):
         epoch_res = np.array(epoch_res)
         mse = np.sqrt(np.mean(np.square(epoch_res)))
         mae = np.mean(np.abs(epoch_res))
-        self.writer.add_scalar(stage + "/mae", mae, self.epoch)
-        self.writer.add_scalar(stage + "/mse", mse, self.epoch)
+
         logging.info(
             "{} Epoch {}, MSE: {:.2f} MAE: {:.2f}, Cost {:.1f} sec".format(
                 stage, self.epoch, mse, mae, time.time() - epoch_start
@@ -380,7 +379,6 @@ class EMDTrainer(Trainer):
             )
         )
 
-        # Replace tensorboard logging with wandb
         wandb.log(
             {
                 f"{stage}/mae": mae,

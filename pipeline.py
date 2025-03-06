@@ -398,14 +398,14 @@ class GrapePipeline:
                         continue
 
                     # Filtering and grouping operations
-                    self.analysis_area_distribution_as_figure(
-                        berry_masks_cpu, short_name + "_before_filter"
-                    )
+                    # self.analysis_area_distribution_as_figure(
+                    #     berry_masks_cpu, short_name + "_before_filter"
+                    # )
                     berry_masks_cpu = self.filter_masks_by_iqr(berry_masks_cpu)
 
-                    self.analysis_area_distribution_as_figure(
-                        berry_masks_cpu, short_name + "_after_filter"
-                    )
+                    # self.analysis_area_distribution_as_figure(
+                    #     berry_masks_cpu, short_name + "_after_filter"
+                    # )
 
                     filtered_berry_masks = self._group_small_masks_by_instance(
                         grape_instances, berry_masks_cpu, 0.9
@@ -517,9 +517,10 @@ def main():
 
 
 """
-python3 pipeline.py --point-ckpt /home/xz/Dev/baseline-exp-playground/GeneralizedLoss-Counting-Pytorch/output/0203-202057/best_val.pth \
---input /home/xz/Downloads/feb-test/converted/ \
---output /home/xz/Downloads/feb-test/converted/berry/
+python3 pipeline.py --point-ckpt /home/xz/Dev/GrapeSAM/weights/point/best_val.pth \
+--mask-ckpt /home/xz/Dev/GrapeSAM/weights/mask2former/model_0214999.pth \
+--input /home/xz/Dev/baseline-exp-playground/DATASET/vivid-close/test \
+--output /home/xz/Pictures/vivid-close-output
 """
 
 if __name__ == "__main__":

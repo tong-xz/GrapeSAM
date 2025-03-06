@@ -48,7 +48,7 @@ def convert_heic_imgs(input_path, output_path, output_format="png"):
         return False
 
 
-def process_folder(input_folder, output_folder, output_format="png"):
+def process_folder(input_folder, output_folder, output_format="png", delete_original=False):
     """
     Process all HEIC/HEIF images in a folder and convert them to the specified format.
 
@@ -56,6 +56,7 @@ def process_folder(input_folder, output_folder, output_format="png"):
         input_folder (str): Path to folder containing HEIC images
         output_folder (str): Path to output folder
         output_format (str): Output format (e.g., 'png', 'jpeg', 'jpg')
+        delete_original (bool): Whether to delete original HEIC files after conversion
 
     Returns:
         tuple: (int, int) Number of successful conversions and total files processed
@@ -89,6 +90,12 @@ def process_folder(input_folder, output_folder, output_format="png"):
 
         if convert_heic_imgs(input_path, output_path, output_format):
             successful += 1
+            # Delete original file if requested and conversion was successful
+            if delete_original:
+                try:
+                    os.remove(input_path)
+                except Exception as e:
+                    print(f"Warning: Could not delete original file {input_path}: {str(e)}")
 
     return successful, total
 
@@ -116,6 +123,11 @@ def main():
         default="png",
         choices=["png", "jpg", "jpeg"],
     )
+    parser.add_argument(
+        "--delete-original",
+        help="Delete original HEIC files after successful conversion",
+        action="store_true",
+    )
 
     args = parser.parse_args()
 
@@ -124,7 +136,7 @@ def main():
         args.output_folder = os.path.join(args.input_folder, "converted")
 
     successful, total = process_folder(
-        args.input_folder, args.output_folder, args.format
+        args.input_folder, args.output_folder, args.format, args.delete_original
     )
     print(f"\nCOMPLETE: {successful} of {total} files converted successfully")
 
