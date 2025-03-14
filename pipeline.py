@@ -259,6 +259,15 @@ class GrapePipeline:
 
         # Step 5: Return the filtered masks (using the valid mask indices)
         return masks[valid_masks]
+    
+    def check_memory_limit(self, limit_gb=60):  # Set threshold below 64GB
+        process = psutil.Process(os.getpid())  
+        mem_info = process.memory_info().rss  # Resident memory usage (bytes)
+        mem_gb = mem_info / (1024 ** 3)  # Convert to GB
+
+        if mem_gb > limit_gb:
+            raise MemoryError(f"Memory usage exceeded {limit_gb}GB! Current: {mem_gb:.2f}GB")
+
 
     def _filter_abnormal_masks(self, masks, k=1):
         """
@@ -393,6 +402,7 @@ class GrapePipeline:
                     del berry_scores_cpu
 
                     grape_instances = self.segment_grape_cluster(img)
+                    self.check_memory_limit()
                     if grape_instances is None:
                         print(f"{short_name} instance segmentation result is None.")
                         continue
@@ -446,6 +456,7 @@ class GrapePipeline:
                         save_path=self.img_save_path,
                         dpi=100,
                     )
+                    self.check_memory_limit()
 
                     # Clean up memory
                     del all_filtered_berry_masks, grape_instances, filtered_berry_masks
@@ -455,6 +466,11 @@ class GrapePipeline:
             except Exception as e:
                 print(f"Error processing image {filename}: {str(e)}")
                 continue
+            
+            except MemoryError as e:
+                print("MemoryError: Not enough memory available! Reduce memory usage.")
+                continue
+
 
             # Update progress bar
             if self.device.type == "cuda":
