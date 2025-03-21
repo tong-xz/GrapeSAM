@@ -30,3 +30,20 @@ SHELL ["conda", "run", "-n", "base", "/bin/bash", "-c"]
 
 # Set working directory
 WORKDIR /app
+
+# Copy requirements.txt into the container
+COPY requirements.txt .
+
+# Create a conda environment and install dependencies from requirements.txt
+RUN conda create -n grapesam python=3.8 && \
+    conda activate grapesam && \
+    pip install -r requirements.txt
+
+# Copy your application code into the container
+COPY . /app
+
+# Set the conda environment to be used by default
+SHELL ["conda", "run", "-n", "grapesam", "/bin/bash", "-c"]
+
+# Make RUN commands use the new environment by default
+ENV PATH /opt/conda/envs/grapesam/bin:$PATH
