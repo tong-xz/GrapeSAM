@@ -2,9 +2,10 @@
 
 **GrapeSAM** is a computer vision model designed for berry counting and grape segmentation tasks, leveraging advanced deep learning techniques.
 
-[toc]
-
----
+## TODO
+1. Point model dataset class
+2. Clean dataset and publish on Huggingface and Zenodo
+3. Clean code and ready to release
 
 ## 🚀 Installation  
 
