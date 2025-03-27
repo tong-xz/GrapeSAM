@@ -84,7 +84,7 @@ class EMDTrainer(Trainer):
         self.downsample_ratio = args.downsample_ratio
         self.datasets = {
             x: Crowd(
-                os.path.join(args.data_dir, x),
+                args.data_dir,
                 args.crop_size,
                 args.downsample_ratio,
                 x,

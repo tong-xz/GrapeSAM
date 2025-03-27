@@ -31,6 +31,16 @@ def cal_innner_area(c_left, c_up, c_right, c_down, bbox):
     )
     return inner_area
 
+def find_dis(point):
+    square = np.sum(point * point, axis=1)
+    dis = np.sqrt(
+        np.maximum(
+            square[:, None] - 2 * np.matmul(point, point.T) + square[None, :], 0.0
+        )
+    )
+    dis = np.mean(np.partition(dis, 3, axis=1)[:, 1:4], axis=1, keepdims=True)
+    return dis
+
 
 def get_im_list(root_path, json_file):
     with open(json_file) as f:
@@ -38,6 +48,11 @@ def get_im_list(root_path, json_file):
     im_list = [os.path.join(root_path, x.split("/")[-1]) for x in im_list]
     return im_list
 
+def get_img_list_txt(root_path, txt_file):
+    with open(os.path.join(root_path, txt_file)) as f:
+        im_list = f.readlines()
+    im_list = [os.path.join(root_path, "imgs", x.strip()) for x in im_list]
+    return im_list
 
 def train_val(im_list, ratio=0.9):
     N = int(float(len(im_list)) * ratio)
@@ -57,19 +72,41 @@ class Crowd(data.Dataset):
         resize=False,
         im_list=None,
         noise=0,
+        use_file_list=False,
     ):
 
         self.noise = noise
         self.root_path = root_path
         self.resize = resize
         if im_list is None:
-            self.im_list = sorted(glob(os.path.join(self.root_path, "*.jpg")))
+            if use_file_list:    
+                if method == "train":
+                    self.im_list = get_img_list_txt(root_path, "train.txt")
+                elif method == "val":
+                    self.im_list = get_img_list_txt(root_path, "val.txt")
+                elif method == "test":
+                    self.im_list = get_img_list_txt(root_path, "test.txt")
+                else:
+                    raise Exception("not implement")
+                
+            else: 
+                all_imgs = os.listdir(os.path.join(root_path, "imgs"))
+                # use first 80% as training set, the rest as validation set
+                if method == "train":
+                    self.im_list = [os.path.join(root_path, "imgs", x) for x in all_imgs[:int(len(all_imgs) * 0.8)]]
+                elif method == "val":
+                    self.im_list = [os.path.join(root_path, "imgs", x) for x in all_imgs[int(len(all_imgs) * 0.8):]]
+
         else:
             self.im_list = im_list
-        if method not in ["train", "val"]:
-            raise Exception("not implement")
-        self.method = method
 
+        # check all files in the list exist, if not, just skip
+        for im_path in self.im_list:
+            if not os.path.exists(im_path):
+                print(f"Skip {im_path}")
+                self.im_list.remove(im_path)
+
+        self.method = method
         self.c_size = crop_size
         self.d_ratio = downsample_ratio
         assert self.c_size % self.d_ratio == 0
@@ -87,7 +124,9 @@ class Crowd(data.Dataset):
 
     def __getitem__(self, item):
         img_path = self.im_list[item % len(self.im_list)]
-        gd_path = img_path.replace("jpg", "npy")
+        gd_path = img_path.replace("imgs", "anns/points")
+        # relpace the extension to npy
+        gd_path = gd_path.split(".")[0] + ".npy"
         img = Image.open(img_path).convert("RGB")
         keypoints = np.load(gd_path)
 
@@ -121,8 +160,9 @@ class Crowd(data.Dataset):
                 torch.from_numpy(keypoints.copy()).float(),
                 st_size,
             )
-        nearest_dis = np.clip(keypoints[:, 2], 4.0, 128.0)
-
+        # nearest_dis = np.clip(keypoints[:, 2], 4.0, 128.0)
+        # calculate the distance between the center of the person and the nearest edge
+        nearest_dis = np.clip(find_dis(keypoints).squeeze(1), 4.0, 128.0)
         points_left_up = keypoints[:, :2] - nearest_dis[:, None] / 2.0
         points_right_down = keypoints[:, :2] + nearest_dis[:, None] / 2.0
         bbox = np.concatenate((points_left_up, points_right_down), axis=1)
