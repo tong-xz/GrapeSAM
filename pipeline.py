@@ -259,15 +259,16 @@ class GrapePipeline:
 
         # Step 5: Return the filtered masks (using the valid mask indices)
         return masks[valid_masks]
-    
+
     def check_memory_limit(self, limit_gb=60):  # Set threshold below 64GB
-        process = psutil.Process(os.getpid())  
+        process = psutil.Process(os.getpid())
         mem_info = process.memory_info().rss  # Resident memory usage (bytes)
-        mem_gb = mem_info / (1024 ** 3)  # Convert to GB
+        mem_gb = mem_info / (1024**3)  # Convert to GB
 
         if mem_gb > limit_gb:
-            raise MemoryError(f"Memory usage exceeded {limit_gb}GB! Current: {mem_gb:.2f}GB")
-
+            raise MemoryError(
+                f"Memory usage exceeded {limit_gb}GB! Current: {mem_gb:.2f}GB"
+            )
 
     def _filter_abnormal_masks(self, masks, k=1):
         """
@@ -427,13 +428,16 @@ class GrapePipeline:
                     all_filtered_berry_masks = torch.cat(filtered_berry_masks, dim=0)
                     closures = self.cal_closure(filtered_berry_masks, grape_instances)
 
-                    # Save results
+                    # Save results with explicit grape instance indices
                     csv_results.append(
                         {
                             "image_name": filename,
                             "grape_cluster_num": grape_instances.shape[0],
                             "total_berry_num": all_filtered_berry_masks.shape[0],
-                            "closures": ["%.2f" % elem for elem in closures],
+                            "closures": {
+                                f"grape_cluster_{i}": f"{closure:.2f}"  # More descriptive keys
+                                for i, closure in enumerate(closures)
+                            },
                             "closure_mean": f"{np.mean(closures):.2f}",
                         }
                     )
@@ -455,6 +459,7 @@ class GrapePipeline:
                         alpha=0.6,
                         save_path=self.img_save_path,
                         dpi=100,
+                        show_grape_indices=True,
                     )
                     self.check_memory_limit()
 
@@ -466,11 +471,10 @@ class GrapePipeline:
             except Exception as e:
                 print(f"Error processing image {filename}: {str(e)}")
                 continue
-            
+
             except MemoryError as e:
                 print("MemoryError: Not enough memory available! Reduce memory usage.")
                 continue
-
 
             # Update progress bar
             if self.device.type == "cuda":

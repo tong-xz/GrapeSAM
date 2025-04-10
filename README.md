@@ -2,14 +2,26 @@
 
 **GrapeSAM** is a computer vision model designed for berry counting and grape segmentation tasks, leveraging advanced deep learning techniques.
 
-## TODO
-1. Point model dataset class
-2. Clean dataset and publish on Huggingface and Zenodo
-3. Clean code and ready to release
+<img src="assets/teaser.png" width="800" alt="des">
+
+## 📦 ViViD-5k Dataset
+The ViViD-5k dataset can be downloaded from [hugging-face](link) and [zenodo](link).
+
 
 ## 🚀 Installation  
+### Environment Setup
 
-To download the pre-trained model from Hugging Face, run:  
+```bash
+conda create -n grapesam python=3.10
+conda activate grapesam
+pip install -r requirements.txt
+
+```
+
+
+
+### Checkpoint Download
+To download the pre-trained **Segment Anything Model** weights from Hugging Face, run:  
 
 ```bash
 bash pretrain/download_huggingface.sh facebook/<model_name> <model_name>
@@ -20,57 +32,19 @@ Where `<model_name>` can be one of the following:
 - `sam-vit-large`  
 - `sam-vit-huge`  
 
----
-
-## 📖 Getting Started  
-
-This repository provides scripts for **berry counting** and **grape segmentation**, with training and inference pipelines for each task.
+The mask2former and point localization model weights can be downloaded from [here](link).
 
 ---
 
-## 🍇 Berry Counting  
-
-### 🔥 Training  
-
-To train the model using point-based annotations, run:
-
-```bash
-mkdir -p weights/point 
-python3 model/point/train.py \
-    --data-dir /home/xz/Dev/baseline-exp-playground/DATASET/vivid_processed \
-    --save-dir ../../weights/point \
-    --batch-size 32 \
-    --max-epoch 2000 \
-    --val-start 0 \
-    --val-epoch 1 
-```
-
-### 🔍 Inference  
-
-(To be added: Include details on inference process and commands.)  
-
----
-
-## 🍇 Grape Segmentation  
-
-🎭 Mask2Former  
-
-
-### 🔥 Training 
-
-To train the **Mask2Former** model using the **VIVID dataset**, modify the dataset registration script:  
-
-- Uncomment line **49** in `model/mask2former/data/datasets/register_vivid_instance.py`:  
-  
-  ```python
-  register_vivid_datasets()
-  ```
-
-### 🔍 Inference  
-
+## 📖 Getting Started 
+We provide the pipeline for computing the cluster closure, pure cluster segmentation, and berry counting separately.
+### 1. Cluster Closure
 Use `model/test_predictor.py` to load the model and predict segmentation outputs on simulation images.
 
-#### 🖼️ Demo: From Image(s) to Mask  
+### 2. Pure Cluster Mask
+
+
+### 3. Pure Berry Localization
 
 Run the following command to generate segmentation masks from input images:  
 
@@ -84,16 +58,53 @@ python model/mask2former_demo.py \
 
 ---
 
-## 📝 License  
 
-(Include licensing details here.)
+## 🔥 Training  
+
+
+
+#### 1. Cluster Segmentation Model
+
+
+
+To train the **Mask2Former** model using the **VIVID dataset**, modify the dataset registration script:  
+
+- Uncomment line **49** in `model/mask2former/data/datasets/register_vivid_instance.py`:  
+  
+  ```python
+  register_vivid_datasets()
+  ```
+
+#### 2. Berry Counting Model
+
+```bash
+mkdir -p weights/point 
+python3 model/point/train.py \
+    --data-dir /home/xz/Dev/baseline-exp-playground/DATASET/vivid_processed \
+    --save-dir ../../weights/point \
+    --batch-size 32 \
+    --max-epoch 2000 \
+    --val-start 0 \
+    --val-epoch 1 
+```
 
 ---
 
 ## 📜 Citation  
 
-If you use **GrapeSAM** in your research or application, please cite our work:  
+```bibtex
+@article{,
+  title={},
+  author={},
+  journal={},
+  year={2025}
+}
+```
 
-(To be added: Include the appropriate citation format.)  
+## 🤝 Acknowledgements
 
----
+We would like to thank the following projects:
+
+- https://github.com/facebookresearch/segment-anything
+- https://github.com/facebookresearch/Mask2Former
+- https://github.com/jia-wan/GeneralizedLoss-Counting-Pytorch
