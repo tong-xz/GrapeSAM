@@ -1,8 +1,15 @@
-# GrapeSAM  
+# GrapeSAM: A Unified Computer Vision Pipeline for Cluster Closure Computation
 
-**GrapeSAM** is a computer vision model designed for berry counting and grape segmentation tasks, leveraging advanced deep learning techniques.
 
-<img src="assets/teaser.png" width="800" alt="des">
+[[`arXiv`](https://arxiv.org/)] [[`Project`](https://bowenc0221.github.io/mask2former)] [[`BibTeX`](#CitingMask2Former)]
+
+dddd
+<div align="center">
+  <img src="assets/teaser.png" width="90%" height="90%"/>
+</div><br/>
+
+
+
 
 ## 📦 ViViD-5k Dataset
 The ViViD-5k dataset can be downloaded from [hugging-face](link) and [zenodo](link).
