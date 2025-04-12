@@ -365,6 +365,19 @@ class GrapePipeline:
 
         return closures
 
+    def draw_box_plot(self, mask0, mask1, name):
+        # make the mask0 and mask1 to the same figure.
+        areas0 = torch.log10(mask0.sum(dim=(1, 2)))
+        areas1 = torch.log10(mask1.sum(dim=(1, 2)))
+        plt.clf()
+        plt.boxplot([areas0.cpu().numpy(), areas1.cpu().numpy()], labels=["Before", "After"])
+        plt.ylabel("Log10 Area (pixels)")
+        plt.grid(axis="y")
+        plt.xlabel("Area (pixels)")
+        plt.title("Box Plot of Mask Areas")
+        plt.savefig(os.path.join(self.img_save_path, f"{name}_box.png"))
+        plt.savefig(os.path.join(self.img_save_path, f"{name}_box.pdf"))
+
     def analysis_area_distribution_as_figure(self, masks, name):
         areas = masks.sum(dim=(1, 2))
         plt.clf()
@@ -409,14 +422,21 @@ class GrapePipeline:
                         continue
 
                     # Filtering and grouping operations
+                    # draw the box plot
                     # self.analysis_area_distribution_as_figure(
                     #     berry_masks_cpu, short_name + "_before_filter"
                     # )
+                    berry_masks_before = berry_masks_cpu.clone()
+
                     berry_masks_cpu = self.filter_masks_by_iqr(berry_masks_cpu)
 
                     # self.analysis_area_distribution_as_figure(
                     #     berry_masks_cpu, short_name + "_after_filter"
                     # )
+                    self.draw_box_plot(
+                        berry_masks_before,
+                        berry_masks_cpu,short_name
+                    )
 
                     filtered_berry_masks = self._group_small_masks_by_instance(
                         grape_instances, berry_masks_cpu, 0.9
