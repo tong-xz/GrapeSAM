@@ -4,25 +4,6 @@ from detectron2.data.datasets import register_coco_instances
 import os
 
 
-# def register_vivid_datasets():
-#     # Define dataset paths
-#     dataset_root = "datasets/vivid"
-#     train_images = os.path.join(dataset_root, "images")
-#     train_annotations = os.path.join(dataset_root, "annotations/instances_train.json")
-#     val_images = os.path.join(dataset_root, "images")
-#     val_annotations = os.path.join(dataset_root, "annotations/instances_val.json")
-
-#     # Register the datasets
-#     register_coco_instances("vivid_train", {}, train_annotations, train_images)
-#     register_coco_instances("vivid_val", {}, val_annotations, val_images)
-
-#     # Optionally add metadata
-#     MetadataCatalog.get("vivid_train").set(thing_classes=["grape"])
-#     MetadataCatalog.get("vivid_val").set(thing_classes=["grape"])
-#     print("VIVID datasets registered!")
-
-# register_vivid_datasets()
-
 from detectron2.data import DatasetCatalog, MetadataCatalog
 from detectron2.data.datasets import load_coco_json
 import os
@@ -39,41 +20,15 @@ def filter_images_without_masks(dataset_dicts):
         annotations = data.get("annotations", [])
         # Check if any annotation has a valid segmentation key
         if data["file_name"].split("/")[-1] in size_mismatch_files:
-            excluded_files.append(data["file_name"]) 
+            excluded_files.append(data["file_name"])
             continue
-        
+
         if all("segmentation" in ann and ann["segmentation"] for ann in annotations):
             filtered_dataset.append(data)
         else:
             excluded_files.append(data["file_name"])
     print(f"Excluded images: {excluded_files}")
     return filtered_dataset
-
-
-# def register_vivid_datasets():
-#     # Define dataset paths
-#     dataset_root = "datasets/vivid"
-#     train_images = os.path.join(dataset_root, "images")
-#     train_annotations = os.path.join(dataset_root, "annotations/instances_train.json")
-#     val_images = os.path.join(dataset_root, "images")
-#     val_annotations = os.path.join(dataset_root, "annotations/instances_val.json")
-
-#     # Load and filter datasets
-#     train_dataset_dicts = load_coco_json(train_annotations, train_images, "vivid_train")
-#     val_dataset_dicts = load_coco_json(val_annotations, val_images, "vivid_val")
-
-#     train_dataset_filtered = filter_images_without_masks(train_dataset_dicts)
-#     val_dataset_filtered = filter_images_without_masks(val_dataset_dicts)
-
-#     # Register filtered datasets
-#     DatasetCatalog.register("vivid_train", lambda: train_dataset_filtered)
-#     MetadataCatalog.get("vivid_train").set(
-#         thing_classes=["grape"], evaluator_type="coco"
-#     )
-
-#     DatasetCatalog.register("vivid_val", lambda: val_dataset_filtered)
-#     MetadataCatalog.get("vivid_val").set(thing_classes=["grape"], evaluator_type="coco")
-#     print("VIVID datasets registered with filtered annotations!")
 
 
 def split_dataset(dataset_dicts, val_ratio=0.2):
@@ -95,28 +50,12 @@ def split_dataset(dataset_dicts, val_ratio=0.2):
     return train_dicts, val_dicts
 
 
-# def make_name(dataset_dicts):
-#     for item in dataset_dicts:
-#         if item["file_name"].lower().endswith(".png.jpg"):
-#             item["file_name"] = item["file_name"][:-4]
-#         elif item["file_name"].lower().endswith(".jpg.jpg"):
-#             item["file_name"] = item["file_name"][:-4]
-
-#         # check if exist images/images in path
-#         if "images/images" in item["file_name"]:
-#             item["file_name"] = item["file_name"].replace("images/images", "images")
-
-#     return dataset_dicts
-
-
 def register_vivid_datasets():
     # Define dataset paths
-    dataset_root = "datasets/vivid"
+    dataset_root = "./Vivid" # [TODO] you need to change this path to your own dataset location
     images_path = os.path.join(dataset_root, "imgs")
     # images_path = os.path.join(dataset_root)
-    annotations_path = os.path.join(
-        dataset_root, "anns/instances_default_v4.json"
-    )
+    annotations_path = os.path.join(dataset_root, "anns/instances_default_v4.json")
 
     # Load dataset from the combined annotation file
     dataset_dicts = load_coco_json(annotations_path, images_path, "vivid_default")
@@ -126,7 +65,7 @@ def register_vivid_datasets():
 
     # Split the dataset into training and validation sets
     train_dicts, val_dicts = split_dataset(dataset_dicts, val_ratio=0.2)
-    
+
     # Register filtered datasets
     DatasetCatalog.register("vivid_train", lambda: train_dicts)
     MetadataCatalog.get("vivid_train").set(
@@ -138,15 +77,15 @@ def register_vivid_datasets():
 
     print("VIVID datasets registered with filtered annotations!")
 
+
 # if you need to train the model, uncomment the following line
-# register_vivid_datasets()
+register_vivid_datasets()
 
 if __name__ == "__main__":
 
     train_dataset = DatasetCatalog.get("vivid_train")
     val_dataset = DatasetCatalog.get("vivid_val")
-    breakpoint() # need to find the number issues.
-
+    breakpoint()  # need to find the number issues.
 
     print(f"Number of training images: {len(train_dataset)}")
     print(f"Number of validation images: {len(val_dataset)}")
