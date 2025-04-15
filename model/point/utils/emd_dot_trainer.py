@@ -14,7 +14,6 @@ import wandb  # Add wandb import
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from models.vgg import vgg19
-from models.resnet import resnet101
 from datasets.crowd import Crowd, train_val, get_im_list
 from geomloss import SamplesLoss
 import inspect
@@ -104,8 +103,7 @@ class EMDTrainer(Trainer):
             for x in ["train", "val"]
         }
 
-        # self.model = vgg19()
-        self.model = resnet101()
+        self.model = vgg19()
 
         self.model.to(self.device)
         self.optimizer = optim.Adam(

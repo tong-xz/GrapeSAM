@@ -79,7 +79,7 @@ def register_vivid_datasets():
 
 
 # if you need to train the model, uncomment the following line
-register_vivid_datasets()
+# register_vivid_datasets()
 
 if __name__ == "__main__":
 

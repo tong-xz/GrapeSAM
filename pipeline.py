@@ -370,7 +370,9 @@ class GrapePipeline:
         areas0 = torch.log10(mask0.sum(dim=(1, 2)))
         areas1 = torch.log10(mask1.sum(dim=(1, 2)))
         plt.clf()
-        plt.boxplot([areas0.cpu().numpy(), areas1.cpu().numpy()], labels=["Before", "After"])
+        plt.boxplot(
+            [areas0.cpu().numpy(), areas1.cpu().numpy()], labels=["Before", "After"]
+        )
         plt.ylabel("Log10 Area (pixels)")
         plt.grid(axis="y")
         plt.xlabel("Area (pixels)")
@@ -428,15 +430,12 @@ class GrapePipeline:
                     # )
                     berry_masks_before = berry_masks_cpu.clone()
 
-                    berry_masks_cpu = self.filter_masks_by_iqr(berry_masks_cpu)
+                    # berry_masks_cpu = self.filter_masks_by_iqr(berry_masks_cpu)
 
                     # self.analysis_area_distribution_as_figure(
                     #     berry_masks_cpu, short_name + "_after_filter"
                     # )
-                    self.draw_box_plot(
-                        berry_masks_before,
-                        berry_masks_cpu,short_name
-                    )
+                    # self.draw_box_plot(berry_masks_before, berry_masks_cpu, short_name)
 
                     filtered_berry_masks = self._group_small_masks_by_instance(
                         grape_instances, berry_masks_cpu, 0.9
