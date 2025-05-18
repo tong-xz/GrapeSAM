@@ -2,7 +2,6 @@
 
 [[`arXiv`](https://arxiv.org/)] [[`Project`](https://bowenc0221.github.io/mask2former)] [[`BibTeX`](#CitingMask2Former)]
 
-dddd
 
 <div align="center">
   <img src="assets/teaser.png" width="90%" height="90%"/>
@@ -10,7 +9,10 @@ dddd
 
 ## 📦 ViViD-5k Dataset
 
-The ViViD-5k dataset can be downloaded from [hugging-face](link) and [zenodo](link).
+The ViViD-5k dataset is available for download through:
+- [Hugging Face](https://huggingface.co/datasets/ViViD-5k)
+- [Google Drive](https://drive.google.com/drive/folders/1DedeM3kxSTjxnBtvx3nbHH3CIVplmhwy?usp=sharing)
+- [Zenodo](https://zenodo.org/record/TBD)
 
 ## 🚀 Installation
 
