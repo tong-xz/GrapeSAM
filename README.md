@@ -2,14 +2,14 @@
 
 [[`arXiv`](https://arxiv.org/)] [[`Project`](https://bowenc0221.github.io/mask2former)] [[`BibTeX`](#CitingMask2Former)]
 
-
+> %CC Temporal Variation
 <div align="center">
-  <img src="assets/teaser.png" width="90%" height="90%"/>
+  <img src="assets/teaser2.png" width="100%" height="100%"/>
 </div><br/>
 
 ## 📦 ViViD-5k Dataset
 
-The ViViD-5k dataset is available for download through:
+The dataset is available for download through:
 - [Hugging Face](https://huggingface.co/datasets/ViViD-5k)
 - [Google Drive](https://drive.google.com/drive/folders/1DedeM3kxSTjxnBtvx3nbHH3CIVplmhwy?usp=sharing)
 - [Zenodo](https://zenodo.org/record/TBD)
@@ -123,6 +123,58 @@ python3 model/point/train.py \
   author={},
   journal={},
   year={2025}
+}
+```
+
+If you use the `ViViD-5k` dataset, please also cite the following works.
+```bibtex
+@article{blekos2023grape,
+  title={A grape dataset for instance segmentation and maturity estimation},
+  author={Blekos, Achilleas and Chatzis, Konstantinos and Kotaidou, Martha and Chatzis, Theocharis and Solachidis, Vassilios and Konstantinidis, Dimitrios and Dimitropoulos, Kosmas},
+  journal={Agronomy},
+  volume={13},
+  number={8},
+  pages={1995},
+  year={2023},
+  publisher={MDPI}
+}
+```
+
+
+```bibtex
+@article{pinheiro2023deep,
+  title={Deep learning YOLO-based solution for grape bunch detection and assessment of biophysical lesions},
+  author={Pinheiro, Isabel and Moreira, Germano and Queir{\'o}s da Silva, Daniel and Magalh{\~a}es, Sandro and Valente, Ant{\'o}nio and Moura Oliveira, Paulo and Cunha, M{\'a}rio and Santos, Filipe},
+  journal={Agronomy},
+  volume={13},
+  number={4},
+  pages={1120},
+  year={2023},
+  publisher={MDPI}
+}
+```
+
+```bibtex
+@article{sozzi2022wgrapeunipd,
+  title={wGrapeUNIPD-DL: An open dataset for white grape bunch detection},
+  author={Sozzi, Marco and Cantalamessa, Silvia and Cogato, Alessia and Kayad, Ahmed and Marinello, Francesco},
+  journal={Data in Brief},
+  volume={43},
+  pages={108466},
+  year={2022},
+  publisher={Elsevier}
+}
+```
+
+```bibtex
+@dataset{morros2021ai4agriculture,
+  author       = {Josep Ramon Morros and Tomas Pariente Lobo and Sergio Salmeron-Majadas and Javier Villazan and Diego Merino and Ana Antunes and Mihai Datcu and Chandrabali Karmakar and Edmundo Guerra and Despina-Athanasia Pantazi and George Stamoulis},
+  title        = {{AI4Agriculture Grape Dataset} (1.0.0)},
+  year         = {2021},
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.5660081},
+  url          = {https://doi.org/10.5281/zenodo.5660081},
+  note         = {Data set}
 }
 ```
 

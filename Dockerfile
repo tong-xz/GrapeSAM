@@ -1,7 +1,7 @@
 # Dockerfile for training and inference
 
 # Use NVIDIA's CUDA base image with your CUDA version
-FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
+FROM nvidia/cuda:11.8.0-base-ubuntu22.04
 
 # Set environment variables for non-interactive installations
 ENV DEBIAN_FRONTEND=noninteractive \
