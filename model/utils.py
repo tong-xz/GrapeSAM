@@ -184,29 +184,168 @@ def show_masks_on_image(
     plt.close(fig)  # Close figure immediately to free memory
 
 
-def show_masks_on_image0(raw_image, masks, output_path):
-    plt.figure(figsize=(10, 10))
-    plt.imshow(np.array(raw_image))
-    ax = plt.gca()
-    ax.set_autoscale_on(False)
-
-    # Process masks in smaller batches
-    batch_size = 10
-    for i in range(0, len(masks), batch_size):
-        batch_masks = masks[i : i + batch_size]
-        for mask in batch_masks:
-            show_mask(mask, ax=ax, random_color=True)
-
-        del batch_masks
-        torch.cuda.empty_cache() if torch.cuda.is_available() else None
-        gc.collect()
-
-    plt.axis("off")
-    plt.savefig(output_path)
-    plt.close()
-
-
 def show_grape_and_berry(
+    raw_image,
+    grape_instances,
+    berry_instances,
+    title=None,
+    alpha=0.6,
+    save_path=None,
+    dpi=100,
+    show_grape_indices=False,
+):
+    """
+    Display grape and berry instance masks with adjustable background transparency.
+
+    Args:
+        raw_image: Input image (PIL Image or numpy array)
+        grape_instances: Grape cluster instance masks (tensor or numpy array)
+        berry_instances: Berry instance masks (tensor or numpy array)
+        title: Title for the saved image
+        alpha: Opacity of the masks (0-1)
+        save_path: Path to save visualization
+        dpi: Resolution for the output image
+        show_grape_indices: Whether to show index numbers on grape instances
+    """
+
+    def get_image_dimensions(image):
+        if isinstance(image, Image.Image):
+            return image.height, image.width
+        return image.shape[:2]
+
+    def setup_figure(aspect_ratio, dpi):
+        total_width = 18
+        subplot_width = total_width / 2.2
+        subplot_height = subplot_width / aspect_ratio
+
+        fig = plt.figure(figsize=(total_width, subplot_height), dpi=dpi)
+        gs = fig.add_gridspec(
+            1,
+            2,
+            width_ratios=[1, 1],
+            left=0.01,
+            right=0.99,
+            bottom=0.01,
+            top=0.99,
+            wspace=0.02,
+        )
+        return fig, gs
+
+    def prepare_instances(instances):
+        if torch.is_tensor(instances):
+            instances = instances.cpu().numpy()
+        return np.atleast_3d(instances)
+
+    def overlay_masks(image, masks, alpha=0.6, white_bg=False, color_seed=None):
+        """Generate colored overlay of instance masks on the image."""
+        # Convert image to numpy array if needed
+        if isinstance(image, Image.Image):
+            image = np.array(image)
+
+        # Setup background
+        h, w = masks.shape[1:3]
+        white_background = np.full((h, w, 3), 255, dtype=np.uint8)
+        image = white_background.copy() if white_bg or image is None else image
+
+        # Ensure RGB format
+        if image.ndim == 2:
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+
+        # Generate colors
+        if color_seed is not None:
+            random.seed(color_seed)
+
+        random_colors = [
+            tuple(
+                (np.array(mcolors.hsv_to_rgb([random.random(), 1, 1])) * 255).astype(
+                    int
+                )
+            )
+            for _ in range(len(masks))
+        ]
+
+        # Create mask overlay
+        mask_combined = np.zeros_like(image, dtype=np.uint8)
+        for idx, mask in enumerate(masks):
+            binary_mask = (mask > 0).astype(np.uint8)
+            mask_color = np.full_like(image, random_colors[idx], dtype=np.uint8)
+            mask_combined = cv2.add(mask_combined, mask_color * binary_mask[..., None])
+
+        return cv2.addWeighted(image, 1 - alpha, mask_combined, alpha, 0), random_colors
+
+    def add_grape_indices(ax, instances, colors):
+        """Add index numbers to grape instances."""
+        for idx, mask in enumerate(instances):
+            if not np.any(mask):
+                continue
+
+            y_indices, x_indices = np.where(mask > 0)
+            if len(y_indices) == 0:
+                continue
+
+            centroid_y = int(np.mean(y_indices))
+            centroid_x = int(np.mean(x_indices))
+            text_color = "white" if np.mean(colors[idx]) < 128 else "black"
+
+            ax.text(
+                centroid_x,
+                centroid_y,
+                str(idx),
+                color=text_color,
+                fontsize=12,
+                fontweight="bold",
+                ha="center",
+                va="center",
+                bbox=dict(facecolor="white", alpha=0.5, edgecolor="none", pad=1),
+            )
+
+    # Main execution
+    if save_path:
+        plt.switch_backend("Agg")
+
+    # Setup figure
+    h, w = get_image_dimensions(raw_image)
+    fig, gs = setup_figure(w / h, dpi)
+    ax1, ax2 = fig.add_subplot(gs[0]), fig.add_subplot(gs[1])
+
+    # Prepare instance masks
+    grape_instances = prepare_instances(grape_instances)
+    berry_instances = prepare_instances(berry_instances)
+
+    # Generate overlays
+    grape_overlay, grape_colors = overlay_masks(
+        raw_image, grape_instances, alpha=alpha, color_seed=42
+    )
+    berry_overlay, _ = overlay_masks(
+        raw_image, berry_instances, alpha=alpha, color_seed=84
+    )
+
+    # Display results
+    ax1.imshow(grape_overlay)
+    ax2.imshow(berry_overlay)
+
+    for ax in (ax1, ax2):
+        ax.set_aspect("equal")
+        ax.axis("off")
+
+    if show_grape_indices:
+        add_grape_indices(ax1, grape_instances, grape_colors)
+
+    # Save or display
+    if save_path:
+        save_file = os.path.join(
+            save_path, f"{title if title else 'grape_and_berry'}.png"
+        )
+        fig.savefig(
+            save_file, bbox_inches="tight", pad_inches=0.5, facecolor="white", dpi=300
+        )
+    else:
+        plt.show()
+
+    plt.close(fig)
+
+
+def show_grape_and_berry0(
     raw_image,
     grape_instances,
     berry_instances,
@@ -240,26 +379,25 @@ def show_grape_and_berry(
     aspect_ratio = w / h
 
     # Adjust figure size based on aspect ratio while maintaining total width
-    total_width = 27  # Total width in inches
-    subplot_width = total_width / 3.5  # Leave some space for gaps
+    total_width = 18  # Reduced from 27 since we only need 2 subplots
+    subplot_width = total_width / 2.2  # Leave some space for gaps
     subplot_height = subplot_width / aspect_ratio
 
     # Create figure with gridspec for more control
     fig = plt.figure(figsize=(total_width, subplot_height), dpi=dpi)
     gs = fig.add_gridspec(
         1,
-        3,
-        width_ratios=[1, 1, 1],
+        2,  # Changed from 3 to 2 subplots
+        width_ratios=[1, 1],
         left=0.01,
         right=0.99,
         bottom=0.01,
         top=0.99,
-        wspace=0.02,  # Consistent spacing between subplots
+        wspace=0.02,
     )
 
     ax1 = fig.add_subplot(gs[0])
     ax2 = fig.add_subplot(gs[1])
-    ax3 = fig.add_subplot(gs[2])
 
     # Convert tensors to numpy
     if torch.is_tensor(grape_instances):
@@ -338,9 +476,6 @@ def show_grape_and_berry(
     berry_overlay, _ = overlay_masks(
         raw_image, berry_instances, alpha=alpha, color_seed=84
     )
-    berry_no_bg, _ = overlay_masks(
-        None, berry_instances, alpha=alpha, white_bg=True, color_seed=84
-    )
 
     # Display results with equal aspect ratio
     ax1.imshow(grape_overlay)
@@ -382,11 +517,6 @@ def show_grape_and_berry(
     ax2.set_aspect("equal")
     ax2.axis("off")
 
-    ax3.imshow(berry_no_bg)
-    ax3.set_aspect("equal")
-    ax3.set_facecolor("white")
-    ax3.axis("off")
-
     # Save or display the figure
     if save_path:
         save_file = os.path.join(
@@ -399,27 +529,6 @@ def show_grape_and_berry(
         plt.show()
 
     plt.close(fig)
-
-
-def show_img_and_keypoints(img, keypoints, title="Image with Keypoints"):
-    """
-    Visualize image and keypoints
-
-    Args:
-        img: PIL Image object
-        keypoints: numpy array of keypoint coordinates
-        title: display title
-    """
-    import matplotlib.pyplot as plt
-
-    img_array = np.array(img)
-
-    plt.figure(figsize=(12, 12))
-    plt.imshow(img_array)
-    plt.scatter(keypoints[:, 0], keypoints[:, 1], c="red", s=50)
-    plt.title(title)
-    plt.axis("on")
-    plt.show()
 
 
 # ----------------SAM scale related--------------------------------

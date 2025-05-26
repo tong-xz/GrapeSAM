@@ -430,7 +430,7 @@ class GrapePipeline:
                     # )
                     berry_masks_before = berry_masks_cpu.clone()
 
-                    # berry_masks_cpu = self.filter_masks_by_iqr(berry_masks_cpu)
+                    berry_masks_cpu = self.filter_masks_by_iqr(berry_masks_cpu)
 
                     # self.analysis_area_distribution_as_figure(
                     #     berry_masks_cpu, short_name + "_after_filter"
