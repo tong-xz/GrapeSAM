@@ -17,22 +17,23 @@ The dataset is available for download through:
 ## 🚀 Installation
 
 ### Environment Setup
+Install [docker](https://docs.docker.com/engine/install/) before running the following commands.
 
 ```bash
-conda create -n grapesam python=3.10
-conda activate grapesam
-pip install -r requirements.txt
+# Build the docker image
+docker build -t grapesam-env .
 
+# Run and mount the docker container
+docker run --gpus all -it --rm \       
+  -v $(pwd):/workspace \
+  -w /workspace \
+  grapesam-env bash
+
+# After entering the container, install the CUDA kernel for MSDeformAttn:
+sh /workspace/model/mask/mask2former/modeling/pixel_decoder/ops/make.sh
 ```
 
-If you want to train the **Mask2Former** model, please install the CUDA kernel for MSDeformAttn:
-
-```bash
-cd mask2former/modeling/pixel_decoder/ops
-sh make.sh
-```
-
-The detailed guide from this [document](https://github.com/facebookresearch/Mask2Former/blob/main/INSTALL.md) 
+The detailed guide for Mask2Former instalation from [document](https://github.com/facebookresearch/Mask2Former/blob/main/INSTALL.md) 
 
 
 ### Checkpoint Download
@@ -40,7 +41,7 @@ The detailed guide from this [document](https://github.com/facebookresearch/Mask
 To download the pre-trained **Segment Anything Model** weights from Hugging Face, run:
 
 ```bash
-bash pretrain/download_huggingface.sh facebook/<model_name> <model_name>
+bash weights/download_hf.sh facebook/<model_name> <model_name>
 ```
 
 Where `<model_name>` can be one of the following:
@@ -58,11 +59,11 @@ The mask2former and point localization model weights can be downloaded from [her
 We provide the pipeline for computing the cluster closure, pure cluster segmentation, and berry counting separately.
 
 ### 1. Cluster Closure
-
-Use `model/test_predictor.py` to load the model and predict segmentation outputs on simulation images.
+```bash
+python3 pipeline.py --point-ckpt ./weights/point/best_val.pth --mask-ckpt ./weights/mask2former/model_0214999.pth --input <input-dir>  --output <output-dir>
 
 ### 2. Pure Cluster Mask
-
+Use `model/test_predictor.py` to load the model and predict segmentation outputs on simulation images.
 ### 3. Pure Berry Localization
 
 Run the following command to generate segmentation masks from input images:
