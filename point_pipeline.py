@@ -46,23 +46,27 @@ def process_single_image(
 
     # Generate and save visualization if requested
     if save_vis:
-        best_masks, best_scores = sam.predict_by_points(
-            sam_model,
-            sam_processor,
-            img,
-            pred_points,
-            optimal=True,
-            multimask_output=True,
+        # show the points on image
+        utils.show_points_on_image(
+            img, points_array, title=save_name, save_path=save_dir
         )
+        # best_masks, best_scores = sam.predict_by_points(
+        #     sam_model,
+        #     sam_processor,
+        #     img,
+        #     pred_points,
+        #     optimal=True,
+        #     multimask_output=True,
+        # )
 
-        utils.show_masks_on_image(
-            img,
-            best_masks,
-            title=save_name,
-            alpha=0.6,
-            show_background=False,
-            save_path=save_dir,
-        )
+        # utils.show_masks_on_image(
+        #     img,
+        #     best_masks,
+        #     title=save_name,
+        #     alpha=0.6,
+        #     show_background=False,
+        #     save_path=save_dir,
+        # )
 
 
 def main():
@@ -87,6 +91,12 @@ def main():
     parser.add_argument(
         "--save-vis", action="store_true", help="Save visualization results"
     )
+    parser.add_argument(
+        "--sam-pth",
+        type=str,
+        default="facebook/sam-vit-huge",
+        help="Path/name to the sam model checkpoint file",
+    )
 
     args = parser.parse_args()
 
@@ -99,8 +109,8 @@ def main():
         args.device if torch.cuda.is_available() and args.device == "cuda" else "cpu"
     )
     point_model = PointModel(args.point_ckpt)
-    sam_model = SamModel.from_pretrained("facebook/sam-vit-huge").to(device)
-    sam_processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
+    sam_model = SamModel.from_pretrained(args.sam_pth).to(device)
+    sam_processor = SamProcessor.from_pretrained(args.sam_pth)
 
     # Process all images in the input directory
     img_dir = Path(args.img_dir)

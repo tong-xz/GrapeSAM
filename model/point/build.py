@@ -1,3 +1,6 @@
+from copy import copy
+import cv2
+from matplotlib import cm
 import torch
 import os
 import numpy as np
@@ -10,6 +13,47 @@ from torchvision import transforms
 from PIL import Image
 
 args = None
+
+
+def show_heatmap(heatmap):
+    heatmap = heatmap.squeeze(0).squeeze(0).cpu().numpy()
+    # heatmap shaped as (H, W)
+    # erosion by using cv2
+    kernel = np.ones((3, 3), np.uint8)
+    heatmap = cv2.dilate(heatmap, kernel, iterations=2)
+
+    heatmap[heatmap < 0.1] = np.nan
+    plt.imshow(heatmap, cmap="Reds", interpolation="nearest")
+    # plt.colorbar()
+    plt.axis("off")
+    plt.savefig("heatmap_wo_bkgd.png", bbox_inches="tight", pad_inches=0.1, dpi=400)
+    plt.close()
+
+
+def show_heatmap_on_raw_image(heatmap, img):
+    import cv2
+    from matplotlib import pyplot as plt
+
+    plt.figure(figsize=(10, 10))
+    # make raw image from tensor to numpy array
+    if torch.is_tensor(img):
+        img = img.squeeze(0).cpu().numpy().transpose(1, 2, 0)
+    # resize raw image to match heatmap size
+    img = cv2.resize(
+        img, (heatmap.shape[3], heatmap.shape[2]), interpolation=cv2.INTER_LINEAR
+    )
+    # normalize heatmap from 0 to 1
+    heatmap = heatmap.squeeze(0).squeeze(0).cpu().numpy()
+    # erosion by using cv2
+    kernel = np.ones((3, 3), np.uint8)
+    heatmap = cv2.dilate(heatmap, kernel, iterations=2)
+    heatmap[heatmap < 0.1] = np.nan
+    plt.imshow(img, interpolation="nearest", alpha=0.6)
+    plt.imshow(heatmap, cmap="Reds", interpolation="nearest", alpha=0.6)
+    # plt.colorbar()
+    plt.axis("off")
+    plt.savefig("heatmap_w_bkgd.png", bbox_inches="tight", pad_inches=0.1, dpi=400)
+    plt.close()
 
 
 def train_collate(batch):
@@ -112,8 +156,8 @@ def sam_points_inference(
 class PointModel:
     def __init__(self, model_path, device="cuda"):
         self.model = vgg19().eval().to(device)
-        self.model.load_state_dict(torch.load(model_path, device)["model_state_dict"])
-        # self.model.load_state_dict(torch.load(model_path, device))
+        # self.model.load_state_dict(torch.load(model_path, device)["model_state_dict"])
+        self.model.load_state_dict(torch.load(model_path, device))
         self.device = device
 
     def __call__(self, img):
@@ -125,6 +169,7 @@ class PointModel:
                 img = img.to(self.device)
             with torch.no_grad():
                 heatmap = self.model(img)
+                # breakpoint()
                 pred_points, pred_points_score = convert_heatmap_to_points(
                     heatmap, point_threshold=0.05
                 )

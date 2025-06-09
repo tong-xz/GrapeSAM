@@ -27,6 +27,7 @@ class GrapePipeline:
         point_model_path,
         mask_ckpt,
         img_save_path,
+        debug,
         mask_cfg="config/coco/instance-segmentation/maskformer2_R50_bs16_50ep.yaml",
         sam_from_pretrained="facebook/sam-vit-huge",
     ) -> None:
@@ -38,6 +39,7 @@ class GrapePipeline:
         """
         # Print device information at initialization
         self._print_device_info()
+        self.debug = debug
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"\nInitializing models on: {self.device}")
@@ -370,13 +372,33 @@ class GrapePipeline:
         areas0 = torch.log10(mask0.sum(dim=(1, 2)))
         areas1 = torch.log10(mask1.sum(dim=(1, 2)))
         plt.clf()
-        plt.boxplot(
-            [areas0.cpu().numpy(), areas1.cpu().numpy()], labels=["Before", "After"]
+
+        # Create boxplot with custom colors
+        boxplot = plt.boxplot(
+            [areas0.cpu().numpy(), areas1.cpu().numpy()],
+            labels=["Before", "After"],
+            patch_artist=True  # This enables fill color customization
         )
-        plt.ylabel("Log10 Area (pixels)")
+        
+        # Set colors for boxes
+        boxplot['boxes'][0].set(facecolor='skyblue', edgecolor='black')
+        boxplot['boxes'][1].set(facecolor='orange', edgecolor='black')
+        
+        # Make sure whiskers and caps are black
+        for whisker in boxplot['whiskers']:
+            whisker.set(color='black')
+        for cap in boxplot['caps']:
+            cap.set(color='black')
+        for median in boxplot['medians']:
+            median.set(color='black')
+        for flier in boxplot['fliers']:
+            flier.set(markeredgecolor='black')
+        # plt.ylabel("Log10 Area (pixels)")
         plt.grid(axis="y")
-        plt.xlabel("Area (pixels)")
+        # plt.xlabel("Area (pixels)")
         plt.title("Box Plot of Mask Areas")
+        # y value from 3.0 to 7.0
+        plt.ylim(3.0, 7.0)
         plt.savefig(os.path.join(self.img_save_path, f"{name}_box.png"))
         plt.savefig(os.path.join(self.img_save_path, f"{name}_box.pdf"))
 
@@ -423,19 +445,19 @@ class GrapePipeline:
                         print(f"{short_name} instance segmentation result is None.")
                         continue
 
-                    # Filtering and grouping operations
-                    # draw the box plot
-                    # self.analysis_area_distribution_as_figure(
-                    #     berry_masks_cpu, short_name + "_before_filter"
-                    # )
-                    berry_masks_before = berry_masks_cpu.clone()
-
-                    berry_masks_cpu = self.filter_masks_by_iqr(berry_masks_cpu)
-
-                    # self.analysis_area_distribution_as_figure(
-                    #     berry_masks_cpu, short_name + "_after_filter"
-                    # )
-                    # self.draw_box_plot(berry_masks_before, berry_masks_cpu, short_name)
+                    if self.debug:
+                        # Filtering and grouping operations
+                        # draw the box plot
+                        berry_masks_before = berry_masks_cpu.clone()
+                        berry_masks_cpu = self.filter_masks_by_iqr(berry_masks_cpu)
+                        self.analysis_area_distribution_as_figure(
+                            berry_masks_cpu, short_name + "_after_filter"
+                        )
+                        self.draw_box_plot(
+                            berry_masks_before, berry_masks_cpu, short_name
+                        )
+                    else:
+                        berry_masks_cpu = self.filter_masks_by_iqr(berry_masks_cpu)
 
                     filtered_berry_masks = self._group_small_masks_by_instance(
                         grape_instances, berry_masks_cpu, 0.9
@@ -546,11 +568,20 @@ def main():
     parser.add_argument(
         "--output", type=str, required=True, help="Path to the output folder"
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug mode for detailed logging and error handling and draw the plots",
+    )
 
     args = parser.parse_args()
 
     grape_pipeline = GrapePipeline(
-        args.point_ckpt, args.mask_ckpt, args.output, sam_from_pretrained=args.sam_pth
+        args.point_ckpt,
+        args.mask_ckpt,
+        args.output,
+        sam_from_pretrained=args.sam_pth,
+        debug=args.debug,
     )
     grape_pipeline.process_folder(args.input)
 

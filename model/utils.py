@@ -44,17 +44,21 @@ def show_boxes_on_image(raw_image, boxes):
     plt.show()
 
 
-def show_points_on_image(raw_image, input_points, input_labels=None):
+def show_points_on_image(raw_image, input_points, save_path, title, input_labels=None):
     plt.figure(figsize=(10, 10))
-    plt.imshow(raw_image)
+    plt.imshow(np.ones_like(raw_image, dtype=np.float32))
     input_points = np.array(input_points)
     if input_labels is None:
         labels = np.ones_like(input_points[:, 0])
     else:
         labels = np.array(input_labels)
     show_points(input_points, labels, plt.gca())
-    plt.axis("on")
-    plt.show()
+    plt.axis("off")
+    save_file = os.path.join(save_path, f"{title}.png")
+    plt.savefig(
+        save_file, bbox_inches="tight", pad_inches=0.1, dpi=100
+    )  # Optimized saving
+    plt.close()
 
 
 def show_points_and_boxes_on_image(raw_image, boxes, input_points, input_labels=None):
@@ -93,25 +97,39 @@ def show_points(coords, labels, ax, marker_size=375):
     ax.scatter(
         pos_points[:, 0],
         pos_points[:, 1],
-        color="green",
-        marker="*",
-        s=marker_size,
-        edgecolor="white",
-        linewidth=1.25,
-    )
-    ax.scatter(
-        neg_points[:, 0],
-        neg_points[:, 1],
         color="red",
-        marker="*",
+        marker=".",
         s=marker_size,
         edgecolor="white",
         linewidth=1.25,
     )
+    # ax.scatter(
+    #     neg_points[:, 0],
+    #     neg_points[:, 1],
+    #     color="red",
+    #     marker=".",
+    #     s=marker_size,
+    #     edgecolor="white",
+    #     linewidth=1.25,
+    # )
 
 
 # # Use Agg backend for faster rendering (disable interactive mode)
 # plt.switch_backend("Agg")
+
+
+def show_heatmap(heatmap):
+    # heatmap shaped as (H, W)
+    plt.imshow(
+        heatmap.squeeze(0).squeeze(0).cpu(), cmap="Reds", interpolation="nearest"
+    )
+    plt.colorbar()
+    plt.axis("off")
+    plt.savefig("heatmap.png", bbox_inches="tight", pad_inches=0.1, dpi=100)
+    plt.close()
+
+
+
 
 
 def show_mask(mask, ax, random_color=False, color=None, alpha=0.6):
