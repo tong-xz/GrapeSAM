@@ -61,10 +61,10 @@ We provide the pipeline for computing the cluster closure, pure cluster segmenta
 ### 1. Cluster Closure
 ```bash
 python3 pipeline.py --point-ckpt ./weights/point/best_val.pth --mask-ckpt ./weights/mask2former/model_0214999.pth --input <input-dir>  --output <output-dir>
+```
 
 ### 2. Pure Cluster Mask
 Use `model/test_predictor.py` to load the model and predict segmentation outputs on simulation images.
-### 3. Pure Berry Localization
 
 Run the following command to generate segmentation masks from input images:
 
@@ -75,6 +75,11 @@ python model/mask2former_demo.py \
     --config-file config/coco/instance-segmentation/maskformer2_R50_bs16_50ep.yaml \
     --opts MODEL.WEIGHTS {model_path}
 ```
+
+### 3. Pure Berry Localization
+
+
+
 
 ---
 
