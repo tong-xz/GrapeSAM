@@ -85,7 +85,10 @@ def visualize_and_save(
 
 class MaskPipeline:
     def __init__(
-        self, devices="cpu", sam_id="/data/models/sam/huggingface/sam-vit-huge/"
+        self,
+        devices="cpu",
+        mask_ckpt="checkpoints/mask_model.pth",
+        sam_id="/data/models/sam/huggingface/sam-vit-huge/",
     ):
         self.devices = devices
         # Load config file and build models
@@ -104,12 +107,7 @@ class MaskPipeline:
         cfg.merge_from_file(
             "config/coco/instance-segmentation/maskformer2_R50_bs16_50ep.yaml"
         )
-        cfg.merge_from_list(
-            [
-                "MODEL.WEIGHTS",
-                "/data/Hypothesis/proposition/Mask2Former/output/model_final.pth",
-            ]
-        )
+        cfg.merge_from_list(["MODEL.WEIGHTS", mask_ckpt])
         cfg.freeze()
         self.mask2former = Mask2FormerRunner(cfg)
 
@@ -209,7 +207,13 @@ class MaskPipeline:
         return final_masks
 
 
-if __name__ == "__main__":
+def evaluate_vivid():
+    """
+    Evaluate the Vivid dataset using the MaskPipeline and MeanAveragePrecision metric.
+    This function processes images from the Vivid dataset, applies the MaskPipeline to generate predicted masks,
+    and computes the mean average precision (mAP) for the segmentation task.
+    It uses the `MeanAveragePrecision` metric from `torchmetrics` to evaluate the performance of the model.
+    """
     from torchmetrics.detection.mean_ap import MeanAveragePrecision
     from tqdm import tqdm
 
@@ -230,7 +234,7 @@ if __name__ == "__main__":
     print("dataset:", len(vivid_exp_dataset))
     for img_path, bboxes, gt_masks in tqdm(vivid_exp_dataset):
         try:
-          
+
             pred_masks = mask_pipeline(img_path)
             if pred_masks == None:
                 continue
@@ -244,7 +248,10 @@ if __name__ == "__main__":
 
             gts = [
                 dict(
-                    masks=torch.tensor(gt_masks).type(torch.bool).any(dim=0).unsqueeze(0),
+                    masks=torch.tensor(gt_masks)
+                    .type(torch.bool)
+                    .any(dim=0)
+                    .unsqueeze(0),
                     labels=torch.tensor([0]),
                 )
             ]
@@ -259,3 +266,63 @@ if __name__ == "__main__":
     result = metric.compute()
     print("AP:", result)
     print("cnt:", cnt)
+
+
+if __name__ == "__main__":
+    # get the input folder and save the output folder from the command line arguments
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Mask Pipeline for Vivid Dataset")
+    parser.add_argument(
+        "--img-dir",
+        type=str,
+        default="/data/datasets/grape/Vivid/imgs/",
+        help="Path to the input folder containing images",
+    )
+    parser.add_argument(
+        "--save-dir",
+        type=str,
+        default="./output/",
+        help="Path to the folder where output images will be saved",
+    )
+    parser.add_argument(
+        "--mask-ckpt",
+        type=str,
+        default="checkpoints/mask_model.pth",
+        help="Path to checkpoint file",
+    )
+    parser.add_argument(
+        "--sam-pth",
+        type=str,
+        default="facebook/sam-vit-huge",
+        help="Path/name to the sam model checkpoint file",
+    )
+    args = parser.parse_args()
+    
+    # Create the output directory if it doesn't exist
+    os.makedirs(args.save_dir, exist_ok=True)
+    # Initialize the MaskPipeline
+    mask_pipeline = MaskPipeline(
+        devices="cuda" if torch.cuda.is_available() else "cpu",
+        mask_ckpt=args.mask_ckpt,
+        sam_id=args.sam_pth,
+    )
+    # Process images in the input directory
+    for img_file in os.listdir(args.img_dir):
+        if img_file.endswith((".png", ".jpg", ".jpeg")):
+            img_path = os.path.join(args.img_dir, img_file)
+            print(f"Processing {img_path}...")
+            pred_masks = mask_pipeline(img_path)
+            if pred_masks is not None:
+                # Save the predicted masks or visualize them
+                save_path = os.path.join(args.save_dir, f"pred_{img_file}")
+                visualize_and_save(
+                    pred_masks.any(dim=0).cpu(),
+                    [0, 0, pred_masks.shape[2], pred_masks.shape[1]],
+                    torch.tensor([[0, 0]]),
+                    torch.tensor([0]),
+                    save_path=save_path,
+                )
+            else:
+                print(f"No masks predicted for {img_path}.")
+

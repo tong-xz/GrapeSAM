@@ -16,6 +16,8 @@ The dataset is available for download through:
 
 ## 🚀 Installation
 
+Our work container two base parts: the **Mask2Former** model for cluster segmentation and the **Point Localization** model for berry counting. The following instructions will guide you through the installation process.
+
 ### Environment Setup
 Install [docker](https://docs.docker.com/engine/install/) before running the following commands.
 
@@ -33,7 +35,14 @@ docker run --gpus all -it --rm \
 sh /workspace/model/mask/mask2former/modeling/pixel_decoder/ops/make.sh
 ```
 
-The detailed guide for Mask2Former instalation from [document](https://github.com/facebookresearch/Mask2Former/blob/main/INSTALL.md) 
+If you want to train the **Mask2Former** model, please install the CUDA kernel for MSDeformAttn:
+
+```bash
+cd mask2former/modeling/pixel_decoder/ops
+sh make.sh
+```
+
+If you encounter any issues, please refer to the [Mask2Former installation guide](https://github.com/facebookresearch/Mask2Former/blob/main/INSTALL.md). 
 
 
 ### Checkpoint Download
@@ -56,15 +65,25 @@ The mask2former and point localization model weights can be downloaded from [her
 
 ## 📖 Getting Started
 
-We provide the pipeline for computing the cluster closure, pure cluster segmentation, and berry counting separately.
+We provide the pipeline for computing the cluster closure, pure cluster segmentation, berry counting separately and the complete pipeline.
 
-### 1. Cluster Closure
+### Complete Pipeline
+
+Run the following command to compute the cluster closure and berry counting:
+
 ```bash
-python3 pipeline.py --point-ckpt ./weights/point/best_val.pth --mask-ckpt ./weights/mask2former/model_0214999.pth --input <input-dir>  --output <output-dir>
+python pipeline.py --point-ckpt <checkpoints/point_model.pth> --mask-ckpt <checkpoints/mask_model.pth> --input </data/Hypothesis/theorem/grape/Dream/test/ood> --output <test/ood_out> --sam-pth=</data/models/sam/huggingface/sam-vit-huge/> 
 ```
 
-### 2. Pure Cluster Mask
-Use `model/test_predictor.py` to load the model and predict segmentation outputs on simulation images.
+- `--point-ckpt`. Path to the pre-trained Point Localization model checkpoint.
+- `--mask-ckpt`. Path to the pre-trained Mask2Former model checkpoint.
+- `--input`. Path to the directory containing images.
+- `--output`. Path to the output directory where results will be saved.
+- `--sam-pth`. (Optitional) Path to the downloaded Segment Anything Model weights if you download it manually.
+
+If you want to use the specific part of this pipeline, you could follow this instruction.
+
+### Part 1. Cluster Mask
 
 Run the following command to generate segmentation masks from input images:
 
@@ -76,9 +95,19 @@ python model/mask2former_demo.py \
     --opts MODEL.WEIGHTS {model_path}
 ```
 
-### 3. Pure Berry Localization
+### Part 2. Pure Berry Localization
 
+```bash
+python point_pipeline.py --img-dir <img_dir> --point-ckpt <checkpoints/point_model.pth> --save-dir <output_dir> --sam-pth=/data/models/sam/huggingface/sam-vit-huge/ --save-vis
+```
 
+- `--img-dir`. Path to the directory containing images.
+- `--point-ckpt`. Path to the pre-trained Point Localization model checkpoint.
+- `--save-dir`. Path to the output directory where results will be saved.
+- `--sam-pth`. (Optional) Path to the downloaded Segment Anything Model weights if you download it manually.
+- `--save-vis`. (Optional) Save the visualization results.
+
+Then you could get the berry localization results containing the point coordinates in file `<img>_points.png` and the point location image `<img>.png`.
 
 
 ---
@@ -105,6 +134,11 @@ cd model/mask
 python train_net.py --num-gpus 1 --config-file ../../config/coco/instance-segmentation/maskformer2_R50_bs16_50ep.yaml SOLVER.IMS_PER_BATCH 4
 ```
 
+- `--num-gpus`. The number of GPUs to use for training.
+- `--config-file`. The path to the configuration file for the model.
+- `SOLVER.IMS_PER_BATCH`. The number of images per batch during training.
+
+
 
 #### 2. Berry Counting Model
 
@@ -118,6 +152,14 @@ python3 model/point/train.py \
     --val-start 0 \
     --val-epoch 1
 ```
+
+- `--data-dir`. Path to the directory containing the processed VIVID dataset.
+- `--save-dir`. Path to the directory where the model checkpoints will be saved.
+- `--batch-size`. The batch size for training.
+- `--max-epoch`. The maximum number of epochs for training.
+- `--val-start`. The epoch to start validation.
+- `--val-epoch`. The frequency of validation epochs.
+
 
 ---
 
@@ -181,6 +223,23 @@ If you use the `ViViD-5k` dataset, please also cite the following works.
   doi          = {10.5281/zenodo.5660081},
   url          = {https://doi.org/10.5281/zenodo.5660081},
   note         = {Data set}
+}
+```
+
+Mask2Former related work:
+
+```bibtex
+@inproceedings{cheng2021mask2former,
+  title={Masked-attention Mask Transformer for Universal Image Segmentation},
+  author={Bowen Cheng and Ishan Misra and Alexander G. Schwing and Alexander Kirillov and Rohit Girdhar},
+  journal={CVPR},
+  year={2022}
+}
+@inproceedings{cheng2021maskformer,
+  title={Per-Pixel Classification is Not All You Need for Semantic Segmentation},
+  author={Bowen Cheng and Alexander G. Schwing and Alexander Kirillov},
+  journal={NeurIPS},
+  year={2021}
 }
 ```
 

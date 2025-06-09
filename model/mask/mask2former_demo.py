@@ -23,8 +23,8 @@ from detectron2.data.detection_utils import read_image
 from detectron2.projects.deeplab import add_deeplab_config
 from detectron2.utils.logger import setup_logger
 
-from model.mask.mask2former import add_maskformer2_config
-from model.predictor import Mask2FormerRunner
+from mask2former import add_maskformer2_config
+from predictor import Mask2FormerRunner
 
 
 # constants
@@ -139,9 +139,7 @@ if __name__ == "__main__":
                 "{}: {} in {:.2f}s".format(
                     path,
                     (
-                        "detected {} instances".format(len(predictions["instances"]))
-                        if "instances" in predictions
-                        else "finished"
+                        "detected {} instances".format(len(predictions))
                     ),
                     time.time() - start_time,
                 )
