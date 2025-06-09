@@ -1,49 +1,29 @@
-# Dockerfile for training and inference
+FROM pytorch/pytorch:2.3.1-cuda11.8-cudnn8-devel
 
-# Use NVIDIA's CUDA base image with your CUDA version
-FROM nvidia/cuda:11.8.0-base-ubuntu22.04
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Set environment variables for non-interactive installations
-ENV DEBIAN_FRONTEND=noninteractive \
-    TZ=Etc/UTC \
-    PATH=/opt/conda/bin:$PATH
-
-# Install Miniconda and other dependencies
+# Install Python, pip, git, and other dependencies
 RUN apt-get update && apt-get install -y \
-    wget \
-    git \
-    bzip2 \
-    libx11-6 \
-    curl \
-    libgl1 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
- 
+    python3 python3-pip python3-dev git \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
+    ninja-build build-essential \
+ && ln -s /usr/bin/python3 /usr/bin/python \
+ && pip3 install --upgrade pip
 
-RUN curl -o /miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
-    bash /miniconda.sh -b -p /opt/conda && \
-    rm /miniconda.sh && \
-    /opt/conda/bin/conda clean -a
+WORKDIR /workspace
 
-# Set Conda environment as default
-SHELL ["conda", "run", "-n", "base", "/bin/bash", "-c"]
+# Set CUDA environment variables
+ENV CUDA_HOME="/usr/local/cuda"
+ENV CUDA_ROOT="/usr/local/cuda"
+ENV PATH="/usr/local/cuda/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
 
-# Set working directory
-WORKDIR /app
-
-# Copy requirements.txt into the container
+# Install Python dependencies
 COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Create a conda environment and install dependencies from requirements.txt
-RUN conda create -n grapesam python=3.8 && \
-    conda activate grapesam && \
-    pip install -r requirements.txt
+# Install Detectron2 from GitHub
+RUN python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
 
-# Copy your application code into the container
-COPY . /app
-
-# Set the conda environment to be used by default
-SHELL ["conda", "run", "-n", "grapesam", "/bin/bash", "-c"]
-
-# Make RUN commands use the new environment by default
-ENV PATH /opt/conda/envs/grapesam/bin:$PATH
+# Set working directory (this will be overridden when mounting volumes)
+WORKDIR /workspace
