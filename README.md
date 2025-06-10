@@ -35,13 +35,6 @@ docker run --gpus all -it --rm \
 sh /workspace/model/mask/mask2former/modeling/pixel_decoder/ops/make.sh
 ```
 
-If you want to train the **Mask2Former** model, please install the CUDA kernel for MSDeformAttn:
-
-```bash
-cd mask2former/modeling/pixel_decoder/ops
-sh make.sh
-```
-
 If you encounter any issues, please refer to the [Mask2Former installation guide](https://github.com/facebookresearch/Mask2Former/blob/main/INSTALL.md). 
 
 
@@ -223,23 +216,6 @@ If you use the `ViViD-5k` dataset, please also cite the following works.
   doi          = {10.5281/zenodo.5660081},
   url          = {https://doi.org/10.5281/zenodo.5660081},
   note         = {Data set}
-}
-```
-
-Mask2Former related work:
-
-```bibtex
-@inproceedings{cheng2021mask2former,
-  title={Masked-attention Mask Transformer for Universal Image Segmentation},
-  author={Bowen Cheng and Ishan Misra and Alexander G. Schwing and Alexander Kirillov and Rohit Girdhar},
-  journal={CVPR},
-  year={2022}
-}
-@inproceedings{cheng2021maskformer,
-  title={Per-Pixel Classification is Not All You Need for Semantic Segmentation},
-  author={Bowen Cheng and Alexander G. Schwing and Alexander Kirillov},
-  journal={NeurIPS},
-  year={2021}
 }
 ```
 
