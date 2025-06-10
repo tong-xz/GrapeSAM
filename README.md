@@ -43,7 +43,7 @@ If you encounter any issues, please refer to the [Mask2Former installation guide
 To download the pre-trained **Segment Anything Model** weights from Hugging Face, run:
 
 ```bash
-bash weights/download_hf.sh facebook/<model_name> <model_name>
+bash scripts/download_hf.sh facebook/<model_name> <save_dir>
 ```
 
 Where `<model_name>` can be one of the following:
