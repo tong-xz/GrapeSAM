@@ -6,8 +6,6 @@
 
 **GrapeSAM** is the official implementation of the paper *"ViViD-5K: Vineyard vision dataset for field-based berry detection and segmentation and grape cluster closure estimation"*. It is a unified, in-field computer vision pipeline for **grape cluster instance segmentation**, **berry detection and counting**, and **visual cluster closure (compactness) estimation** in viticulture. The pipeline combines **point-based berry localization**, **prompt-based segmentation with the Segment Anything Model (SAM)**, and **Mask2Former** transformer-based cluster segmentation, and is trained on the **ViViD-5K** dataset (5,000 field images, 648,000+ annotated berry centroids across 13 grape varieties).
 
-**Keywords:** grape cluster segmentation · berry detection · berry counting · cluster closure estimation · vineyard · viticulture · precision agriculture · Segment Anything Model (SAM) · Mask2Former · instance segmentation · deep learning · ViViD-5K dataset
-
 <div align="center">
   <img src="assets/teaser2.png" width="100%" height="100%" alt="GrapeSAM pipeline: grape cluster segmentation, berry detection and counting, and cluster closure estimation on the ViViD-5K vineyard dataset"/>
 </div><br/>
