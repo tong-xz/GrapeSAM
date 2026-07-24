@@ -1,6 +1,6 @@
 # GrapeSAM: A Unified Computer Vision Pipeline for Cluster Closure Computation
 
-[[`arXiv`](https://arxiv.org/)] [[`Project`](https://bowenc0221.github.io/mask2former)] [[`BibTeX`](#CitingMask2Former)]
+[[`arXiv`](https://arxiv.org/abs/2605.24353)]
 
 > %CC Temporal Variation
 <div align="center">
