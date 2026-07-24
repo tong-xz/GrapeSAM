@@ -1,10 +1,15 @@
-# GrapeSAM: A Unified Computer Vision Pipeline for Cluster Closure Computation
+# GrapeSAM: A Unified Computer Vision Pipeline for Grape Cluster Segmentation, Berry Detection, Counting, and Cluster Closure Estimation
 
-[[`arXiv`](https://arxiv.org/abs/2605.24353)]
+[![arXiv](https://img.shields.io/badge/arXiv-2605.24353-b31b1b.svg)](https://arxiv.org/abs/2605.24353)
+[![Dataset](https://img.shields.io/badge/Dataset-ViViD--5K-blue.svg)](https://huggingface.co/datasets/ViViD-5k)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
-> %CC Temporal Variation
+**GrapeSAM** is the official implementation of the paper *"ViViD-5K: Vineyard vision dataset for field-based berry detection and segmentation and grape cluster closure estimation"*. It is a unified, in-field computer vision pipeline for **grape cluster instance segmentation**, **berry detection and counting**, and **visual cluster closure (compactness) estimation** in viticulture. The pipeline combines **point-based berry localization**, **prompt-based segmentation with the Segment Anything Model (SAM)**, and **Mask2Former** transformer-based cluster segmentation, and is trained on the **ViViD-5K** dataset (5,000 field images, 648,000+ annotated berry centroids across 13 grape varieties).
+
+**Keywords:** grape cluster segmentation · berry detection · berry counting · cluster closure estimation · vineyard · viticulture · precision agriculture · Segment Anything Model (SAM) · Mask2Former · instance segmentation · deep learning · ViViD-5K dataset
+
 <div align="center">
-  <img src="assets/teaser2.png" width="100%" height="100%"/>
+  <img src="assets/teaser2.png" width="100%" height="100%" alt="GrapeSAM pipeline: grape cluster segmentation, berry detection and counting, and cluster closure estimation on the ViViD-5K vineyard dataset"/>
 </div><br/>
 
 ## 📦 ViViD-5k Dataset
@@ -52,7 +57,7 @@ Where `<model_name>` can be one of the following:
 - `sam-vit-large`
 - `sam-vit-huge`
 
-The mask2former and point localization model weights can be downloaded from [here](link).
+The mask2former and point localization model weights can be downloaded from [here](https://drive.google.com/drive/folders/1DedeM3kxSTjxnBtvx3nbHH3CIVplmhwy?usp=sharing).
 
 ---
 
@@ -65,7 +70,7 @@ We provide the pipeline for computing the cluster closure, pure cluster segmenta
 Run the following command to compute the cluster closure and berry counting:
 
 ```bash
-python pipeline.py --point-ckpt <checkpoints/point_model.pth> --mask-ckpt <checkpoints/mask_model.pth> --input </data/Hypothesis/theorem/grape/Dream/test/ood> --output <test/ood_out> --sam-pth=</data/models/sam/huggingface/sam-vit-huge/> 
+python pipeline.py --point-ckpt <checkpoints/point_model.pth> --mask-ckpt <checkpoints/mask_model.pth> --input <path/to/input/images> --output <path/to/output_dir> --sam-pth=<path/to/sam-vit-huge/> 
 ```
 
 - `--point-ckpt`. Path to the pre-trained Point Localization model checkpoint.
@@ -159,11 +164,11 @@ python3 model/point/train.py \
 ## 📜 Citation
 
 ```bibtex
-@article{,
-  title={},
-  author={},
-  journal={},
-  year={2025}
+@article{tong2026vivid5k,
+  title={ViViD-5K: Vineyard vision dataset for field-based berry detection and segmentation and grape cluster closure estimation},
+  author={Tong, Xiangzhi and Zhang, Chengrui and Flaherty, Mac and Garcia, Andre Matteo and Gorman, Dominic and Jaramillo, Jonathan and Vanden Heuvel, Justine E. and Jiang, Yu},
+  journal={arXiv preprint arXiv:2605.24353},
+  year={2026}
 }
 ```
 
