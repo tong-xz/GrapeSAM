@@ -1,4 +1,4 @@
-# GrapeSAM: A Unified Computer Vision Pipeline for Grape Cluster Segmentation, Berry Detection, Counting, and Cluster Closure Estimation
+# GrapeSAM
 
 [![arXiv](https://img.shields.io/badge/arXiv-2605.24353-b31b1b.svg)](https://arxiv.org/abs/2605.24353)
 [![Dataset](https://img.shields.io/badge/Dataset-ViViD--5K-blue.svg)](https://huggingface.co/datasets/XZhi/ViViD-5k)
