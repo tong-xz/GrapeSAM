@@ -1,7 +1,6 @@
-# GrapeSAM
+# GrapeSAM: A Unified Computer Vision Pipeline for Grape Cluster Segmentation, Berry Detection, Counting, and Cluster Closure Estimation
 
 [![arXiv](https://img.shields.io/badge/arXiv-2605.24353-b31b1b.svg)](https://arxiv.org/abs/2605.24353)
-[![HF Paper](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Paper-yellow.svg)](https://huggingface.co/papers/2605.24353)
 [![Dataset](https://img.shields.io/badge/Dataset-ViViD--5K-blue.svg)](https://huggingface.co/datasets/XZhi/ViViD-5k)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
@@ -16,11 +15,11 @@
 The dataset is available for download through:
 - [Hugging Face](https://huggingface.co/datasets/XZhi/ViViD-5k)
 - [Google Drive](https://drive.google.com/drive/folders/1DedeM3kxSTjxnBtvx3nbHH3CIVplmhwy?usp=sharing)
-- Zenodo (coming soon)
+- Zenodo (DOI coming soon)
 
 ## 🚀 Installation
 
-Our work contains two main parts: the **Mask2Former** model for cluster segmentation and the **Point Localization** model for berry counting. The following instructions will guide you through the installation process.
+Our work contains two base parts: the **Mask2Former** model for cluster segmentation and the **Point Localization** model for berry counting. The following instructions will guide you through the installation process.
 
 ### Environment Setup
 Install [docker](https://docs.docker.com/engine/install/) before running the following commands.
@@ -30,7 +29,7 @@ Install [docker](https://docs.docker.com/engine/install/) before running the fol
 docker build -t grapesam-env .
 
 # Run and mount the docker container
-docker run --gpus all -it --rm \
+docker run --gpus all -it --rm \       
   -v $(pwd):/workspace \
   -w /workspace \
   grapesam-env bash
@@ -142,7 +141,7 @@ python train_net.py --num-gpus 1 --config-file ../../config/coco/instance-segmen
 ```bash
 mkdir -p weights/point
 python3 model/point/train.py \
-    --data-dir <path/to/vivid_processed> \
+    --data-dir /home/xz/Dev/baseline-exp-playground/DATASET/vivid_processed \
     --save-dir ../../weights/point \
     --batch-size 32 \
     --max-epoch 2000 \
